@@ -1,0 +1,140 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { useMemo } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+
+import { ElevationChart, SplitsTable } from '@/components/charts';
+import { RouteMap } from '@/components/RouteMap';
+import { useColors } from '@/components/theme';
+import { Card, Empty, SectionTitle, Stat } from '@/components/ui';
+import { confirm } from '@/lib/confirm';
+import { distanceUnit, formatDateTime, formatDistanceValue, formatDuration, formatElevation, formatPace, formatPaceValue, paceUnit } from '@/lib/format';
+import { progressSeries } from '@/lib/geo';
+import { BEST_EFFORTS, computeSplits, paceSecPerKm, prsSetBy } from '@/lib/stats';
+import { deleteRun, useProfile, useRun, useRuns } from '@/store';
+
+export default function RunDetail() {
+  const c = useColors();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const run = useRun(id);
+  const runs = useRuns();
+  const { units } = useProfile();
+
+  const splits = useMemo(() => (run ? computeSplits(run.segments, units) : []), [run, units]);
+  const samples = useMemo(() => (run ? progressSeries(run.segments) : []), [run]);
+  const prs = useMemo(() => (run ? new Set(prsSetBy(run, runs)) : new Set<string>()), [run, runs]);
+
+  if (!run) {
+    return <Empty title="Run not found" body="It may have been deleted." />;
+  }
+
+  const remove = async () => {
+    if (!(await confirm('Delete run?', `"${run.title}" will be permanently deleted.`, 'Delete', true))) return;
+    deleteRun(run.id);
+    router.back();
+  };
+
+  const efforts = BEST_EFFORTS.filter((e) => run.bestEfforts[e.key] != null);
+  const hasRoute = run.segments.some((s) => s.length > 1);
+
+  return (
+    <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ paddingBottom: 48 }}>
+      <Stack.Screen
+        options={{
+          title: run.title,
+          headerRight: () => (
+            <View style={{ flexDirection: 'row', gap: 16 }}>
+              <Pressable accessibilityLabel="Edit run" onPress={() => router.push(`/edit/${run.id}`)} hitSlop={8}>
+                <Ionicons name="create-outline" size={22} color={c.accent} />
+              </Pressable>
+              <Pressable accessibilityLabel="Delete run" onPress={remove} hitSlop={8}>
+                <Ionicons name="trash-outline" size={22} color={c.danger} />
+              </Pressable>
+            </View>
+          ),
+        }}
+      />
+      {hasRoute && <RouteMap segments={run.segments} style={styles.map} />}
+
+      <View style={styles.body}>
+        <View style={{ gap: 4 }}>
+          <Text style={[styles.title, { color: c.text }]}>{run.title}</Text>
+          <Text style={{ color: c.muted }}>{formatDateTime(run.startedAt)}</Text>
+          {run.notes ? <Text style={[styles.notes, { color: c.text }]}>{run.notes}</Text> : null}
+        </View>
+
+        <Card style={styles.grid}>
+          <View style={styles.cell}>
+            <Stat label="Distance" value={formatDistanceValue(run.distanceM, units)} unit={distanceUnit(units)} size="lg" />
+          </View>
+          <View style={styles.cell}>
+            <Stat label="Avg pace" value={formatPaceValue(paceSecPerKm(run.distanceM, run.movingMs), units)} unit={paceUnit(units)} size="lg" />
+          </View>
+          <View style={styles.cell}>
+            <Stat label="Moving time" value={formatDuration(run.movingMs)} size="lg" />
+          </View>
+          <View style={styles.cell}>
+            <Stat label="Elevation gain" value={formatElevation(run.elevationGainM, units)} size="lg" />
+          </View>
+          <View style={styles.cell}>
+            <Stat label="Elapsed time" value={formatDuration(run.elapsedMs)} />
+          </View>
+          <View style={styles.cell}>
+            <Stat label="Effort" value={run.effort ? `${run.effort}/10` : '—'} />
+          </View>
+        </Card>
+
+        {splits.length > 0 && (
+          <>
+            <SectionTitle>Splits</SectionTitle>
+            <Card>
+              <SplitsTable splits={splits} units={units} />
+            </Card>
+          </>
+        )}
+
+        {samples.some((s) => s.alt != null) && (
+          <>
+            <SectionTitle>Elevation</SectionTitle>
+            <Card>
+              <ElevationChart samples={samples} />
+            </Card>
+          </>
+        )}
+
+        {efforts.length > 0 && (
+          <>
+            <SectionTitle>Best efforts</SectionTitle>
+            <Card style={{ gap: 10 }}>
+              {efforts.map((e) => {
+                const ms = run.bestEfforts[e.key]!;
+                return (
+                  <View key={e.key} style={styles.effortRow}>
+                    <Text style={[styles.effortLabel, { color: c.text }]}>
+                      {prs.has(e.key) ? '🏆 ' : ''}
+                      {e.label}
+                    </Text>
+                    <Text style={{ color: c.muted, fontVariant: ['tabular-nums'] }}>{formatPace(ms / e.metres, units)}</Text>
+                    <Text style={[styles.effortTime, { color: prs.has(e.key) ? c.accent : c.text }]}>{formatDuration(ms)}</Text>
+                  </View>
+                );
+              })}
+            </Card>
+          </>
+        )}
+      </View>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  map: { height: 280 },
+  body: { padding: 16, gap: 12 },
+  title: { fontSize: 26, fontWeight: '800' },
+  notes: { fontSize: 15, lineHeight: 21, marginTop: 6 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 16 },
+  cell: { width: '50%' },
+  effortRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  effortLabel: { flex: 1, fontSize: 15, fontWeight: '600' },
+  effortTime: { width: 72, textAlign: 'right', fontWeight: '700', fontVariant: ['tabular-nums'] },
+});
