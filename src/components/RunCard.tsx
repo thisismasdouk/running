@@ -1,4 +1,5 @@
 import { Link } from 'expo-router';
+import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { formatDate, formatDistanceValue, distanceUnit, formatDuration, formatPace } from '@/lib/format';
@@ -8,7 +9,7 @@ import { FluidRouteShape } from './RouteShape';
 import { useColors } from './theme';
 import { Card, Stat } from './ui';
 
-export function RunCard({ run, units, prCount }: { run: Run; units: Units; prCount: number }) {
+export const RunCard = memo(function RunCard({ run, units, prCount }: { run: Run; units: Units; prCount: number }) {
   const c = useColors();
   return (
     <Link href={`/run/${run.id}`} asChild>
@@ -18,6 +19,7 @@ export function RunCard({ run, units, prCount }: { run: Run; units: Units; prCou
             <Text style={[styles.title, { color: c.text }]} numberOfLines={1}>
               {run.title}
             </Text>
+            {run.simulated && <Text style={[styles.badge, { color: c.muted }]}>SIMULATED (DEMO)</Text>}
             <Text style={{ color: c.muted, fontSize: 13 }}>{formatDate(run.startedAt)}</Text>
           </View>
           <View style={styles.stats}>
@@ -39,7 +41,7 @@ export function RunCard({ run, units, prCount }: { run: Run; units: Units; prCou
       </Pressable>
     </Link>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: { gap: 12 },
@@ -47,5 +49,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: '700' },
   stats: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
   pr: { fontWeight: '700' },
+  badge: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
   map: { borderRadius: 12, overflow: 'hidden' },
 });

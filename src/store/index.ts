@@ -12,6 +12,9 @@ export const DEFAULT_PROFILE: Profile = {
   units: 'metric',
   weeklyGoalM: 20_000,
   splitHaptics: true,
+  audioCues: true,
+  autoPause: false,
+  countdown: true,
 };
 
 type Listener = () => void;

@@ -8,6 +8,9 @@ import { useColors } from './theme';
 
 type Props = { segments: Segment[]; width: number; height: number; strokeWidth?: number; padding?: number };
 
+/** Thumbnails don't need every fix; a long run has thousands. */
+const MAX_POINTS = 400;
+
 /**
  * Draws a route as a plain line, without map tiles. Used for feed
  * thumbnails and wherever a native map isn't available (web).
@@ -24,10 +27,15 @@ export function RouteShape({ segments, width, height, strokeWidth = 3, padding =
     const scale = Math.min((width - padding * 2) / spanX, (height - padding * 2) / spanY);
     const offX = (width - spanX * scale) / 2;
     const offY = (height - spanY * scale) / 2;
+    const total = segments.reduce((n, seg) => n + seg.length, 0);
+    const step = Math.max(1, Math.ceil(total / MAX_POINTS));
     return segments.map((seg) =>
-      seg.map((p) => ({ x: offX + (p.lon - b.minLon) * kx * scale, y: offY + (b.maxLat - p.lat) * scale })),
+      seg
+        .filter((_, i) => i % step === 0 || i === seg.length - 1)
+        .map((p) => ({ x: offX + (p.lon - b.minLon) * kx * scale, y: offY + (b.maxLat - p.lat) * scale })),
     );
   }, [segments, width, height, padding]);
+  const polylines = useMemo(() => lines.map((pts) => pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')), [lines]);
 
   const first = lines[0]?.[0];
   const lastSeg = lines[lines.length - 1];
@@ -36,10 +44,10 @@ export function RouteShape({ segments, width, height, strokeWidth = 3, padding =
   return (
     <View style={{ width, height, backgroundColor: c.accentSoft }}>
       <Svg width={width} height={height}>
-        {lines.map((pts, i) => (
+        {polylines.map((points, i) => (
           <Polyline
             key={i}
-            points={pts.map((p) => `${p.x},${p.y}`).join(' ')}
+            points={points}
             fill="none"
             stroke={c.accent}
             strokeWidth={strokeWidth}

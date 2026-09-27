@@ -1,3 +1,5 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { router } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
@@ -21,6 +23,13 @@ export default function Profile() {
   // The goal is stored in metres but adjusted in whole km/mi steps.
   const goalInUnits = Math.round(profile.weeklyGoalM / unitLength(units));
   const setGoal = (n: number) => updateProfile({ weeklyGoalM: Math.max(1, Math.min(300, n)) * unitLength(units) });
+  // Snap the goal to a whole number of the new unit, so the goal shown here and the
+  // "x to your weekly goal" remainder on Home add up.
+  const setUnits = (u: Units) => {
+    if (u === units) return;
+    const goal = Math.max(1, Math.min(300, Math.round(profile.weeklyGoalM / unitLength(u))));
+    updateProfile({ units: u, weeklyGoalM: goal * unitLength(u) });
+  };
 
   const toggleSamples = async () => {
     if (hasSamples) {
@@ -59,7 +68,7 @@ export default function Profile() {
             {(['metric', 'imperial'] as Units[]).map((u) => (
               <Pressable
                 key={u}
-                onPress={() => updateProfile({ units: u })}
+                onPress={() => setUnits(u)}
                 style={[styles.segment, units === u && { backgroundColor: c.card }]}
               >
                 <Text style={{ color: units === u ? c.text : c.muted, fontWeight: '700' }}>{u === 'metric' ? 'km' : 'mi'}</Text>
@@ -79,17 +88,30 @@ export default function Profile() {
           </View>
         </View>
 
-        <View style={styles.setting}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.settingLabel, { color: c.text }]}>Split alerts</Text>
-            <Text style={{ color: c.muted, fontSize: 13 }}>Buzz at every {units === 'metric' ? 'kilometre' : 'mile'}</Text>
-          </View>
-          <Switch
-            value={profile.splitHaptics}
-            onValueChange={(splitHaptics) => updateProfile({ splitHaptics })}
-            trackColor={{ true: c.accent }}
-          />
-        </View>
+        <Toggle
+          label="Split alerts"
+          detail={`Buzz at every ${units === 'metric' ? 'kilometre' : 'mile'}`}
+          value={profile.splitHaptics}
+          onChange={(splitHaptics) => updateProfile({ splitHaptics })}
+        />
+        <Toggle
+          label="Voice cues"
+          detail="Speak your time and pace at each split"
+          value={profile.audioCues}
+          onChange={(audioCues) => updateProfile({ audioCues })}
+        />
+        <Toggle
+          label="Auto-pause"
+          detail="Stop the clock while you're standing still"
+          value={profile.autoPause}
+          onChange={(autoPause) => updateProfile({ autoPause })}
+        />
+        <Toggle
+          label="Countdown"
+          detail="3-2-1 before recording starts"
+          value={profile.countdown}
+          onChange={(countdown) => updateProfile({ countdown })}
+        />
       </Card>
 
       <SectionTitle>Try it out</SectionTitle>
@@ -99,7 +121,31 @@ export default function Profile() {
         </Text>
         <Button title={hasSamples ? 'Remove sample runs' : 'Load sample runs'} onPress={toggleSamples} variant="secondary" />
       </Card>
+
+      <SectionTitle>About</SectionTitle>
+      <Card>
+        <Pressable accessibilityRole="link" onPress={() => router.push('/privacy')} style={styles.link}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.settingLabel, { color: c.text }]}>Privacy</Text>
+            <Text style={{ color: c.muted, fontSize: 13 }}>Your runs never leave this device</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={c.muted} />
+        </Pressable>
+      </Card>
     </ScrollView>
+  );
+}
+
+function Toggle({ label, detail, value, onChange }: { label: string; detail: string; value: boolean; onChange: (v: boolean) => void }) {
+  const c = useColors();
+  return (
+    <View style={styles.setting}>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.settingLabel, { color: c.text }]}>{label}</Text>
+        <Text style={{ color: c.muted, fontSize: 13 }}>{detail}</Text>
+      </View>
+      <Switch value={value} onValueChange={onChange} trackColor={{ true: c.accent }} accessibilityLabel={label} />
+    </View>
   );
 }
 
@@ -121,6 +167,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-around', alignSelf: 'stretch' },
   setting: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   settingLabel: { fontSize: 16, fontWeight: '600' },
+  link: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   segmented: { flexDirection: 'row', borderRadius: 10, padding: 3 },
   segment: { paddingHorizontal: 18, paddingVertical: 6, borderRadius: 8 },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 12 },

@@ -10,6 +10,7 @@ import { Card, Empty, SectionTitle, Stat } from '@/components/ui';
 import { confirm } from '@/lib/confirm';
 import { distanceUnit, formatDateTime, formatDistanceValue, formatDuration, formatElevation, formatPace, formatPaceValue, paceUnit } from '@/lib/format';
 import { progressSeries } from '@/lib/geo';
+import { goBack } from '@/lib/nav';
 import { BEST_EFFORTS, computeSplits, paceSecPerKm, prsSetBy } from '@/lib/stats';
 import { deleteRun, useProfile, useRun, useRuns } from '@/store';
 
@@ -31,7 +32,7 @@ export default function RunDetail() {
   const remove = async () => {
     if (!(await confirm('Delete run?', `"${run.title}" will be permanently deleted.`, 'Delete', true))) return;
     deleteRun(run.id);
-    router.back();
+    goBack();
   };
 
   const efforts = BEST_EFFORTS.filter((e) => run.bestEfforts[e.key] != null);
@@ -60,6 +61,7 @@ export default function RunDetail() {
         <View style={{ gap: 4 }}>
           <Text style={[styles.title, { color: c.text }]}>{run.title}</Text>
           <Text style={{ color: c.muted }}>{formatDateTime(run.startedAt)}</Text>
+          {run.simulated && <Text style={{ color: c.muted, fontWeight: '700' }}>Recorded with simulated GPS (demo)</Text>}
           {run.notes ? <Text style={[styles.notes, { color: c.text }]}>{run.notes}</Text> : null}
         </View>
 
