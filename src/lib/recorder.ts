@@ -12,6 +12,7 @@ import {
   GAP_MS,
   haversine,
 } from './geo';
+import { lapsFromMarks, type LapMark } from './laps';
 import type { Segment, TrackPoint } from './types';
 
 export type RecorderStatus = 'idle' | 'recording' | 'paused';
@@ -36,16 +37,21 @@ export type RecorderState = {
   lastSplit: { index: number; ms: number } | null;
   /** Fed by the web demo's simulated GPS. */
   simulated: boolean;
+  /** Run totals at each Lap press. */
+  lapMarks: LapMark[];
 };
 
 export type RecorderEvent =
   | { type: 'split'; index: number; distanceM: number; movingMs: number; splitMs: number; splitM: number }
+  | { type: 'lap'; index: number; distanceM: number; movingMs: number }
   | { type: 'autopause' }
   | { type: 'autoresume' };
 
 const KEY = 'recorder';
 /** Fixes up to this much older than the start/resume time are still used (device and GPS clocks can disagree). */
 const STALE_WINDOW_MS = 30_000;
+/** Lap presses closer together than this (in moving time) are treated as a double tap. */
+const MIN_LAP_MS = 1000;
 /** Write the in-progress run to disk at most this often, plus on pause/finish and when the app backgrounds. */
 const PERSIST_EVERY_MS = 10_000;
 
@@ -62,6 +68,7 @@ const IDLE: RecorderState = {
   splitAtMs: 0,
   lastSplit: null,
   simulated: false,
+  lapMarks: [],
 };
 
 function load(): RecorderState {
@@ -167,16 +174,35 @@ export const recorder = {
     );
   },
 
+  /**
+   * Ends the current lap and starts the next one. Returns the lap just
+   * completed (1-based), or null when not recording or pressed twice in a row.
+   */
+  lap(now = Date.now()) {
+    const s = current();
+    if (s.status !== 'recording') return null;
+    const moving = movingMs(s, now);
+    const prev = s.lapMarks[s.lapMarks.length - 1] ?? { distanceM: 0, movingMs: 0 };
+    if (moving - prev.movingMs < MIN_LAP_MS) return null;
+    const mark = { distanceM: s.distanceM, movingMs: moving };
+    set({ ...s, lapMarks: [...s.lapMarks, mark] }, true);
+    const lap = { index: s.lapMarks.length + 1, distanceM: mark.distanceM - prev.distanceM, movingMs: mark.movingMs - prev.movingMs };
+    emit({ type: 'lap', ...lap });
+    return lap;
+  },
+
   /** Clears the in-progress run and returns what was recorded. */
   finish(now = Date.now()) {
     const s = current();
+    const moving = movingMs(s, now);
     const result = {
       startedAt: s.startedAt ?? now,
       segments: s.segments.filter((seg) => seg.length > 0),
       distanceM: s.distanceM,
-      movingMs: movingMs(s, now),
+      movingMs: moving,
       elapsedMs: now - (s.startedAt ?? now),
       simulated: s.simulated,
+      laps: lapsFromMarks(s.lapMarks, { distanceM: s.distanceM, movingMs: moving }),
     };
     set(IDLE, true);
     return result;
@@ -316,6 +342,16 @@ export function currentSplit(s: RecorderState, now = Date.now(), len = recorder.
   const d = Math.max(0, s.distanceM - s.splitIndex * len);
   const ms = Math.max(0, movingMs(s, now) - s.splitAtMs);
   return { index: s.splitIndex + 1, distanceM: d, ms };
+}
+
+/** The lap in progress: distance and moving time since the last Lap press (or the start). */
+export function currentLap(s: RecorderState, now = Date.now()) {
+  const prev = s.lapMarks[s.lapMarks.length - 1] ?? { distanceM: 0, movingMs: 0 };
+  return {
+    index: s.lapMarks.length + 1,
+    distanceM: Math.max(0, s.distanceM - prev.distanceM),
+    ms: Math.max(0, movingMs(s, now) - prev.movingMs),
+  };
 }
 
 export function useRecorder(): RecorderState {

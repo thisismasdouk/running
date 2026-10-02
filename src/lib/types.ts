@@ -32,6 +32,23 @@ export type Split = {
 
 export type BestEffortKey = '400m' | '1k' | '1mi' | '5k' | '10k' | 'half' | 'marathon';
 
+export type RunType = 'easy' | 'long' | 'tempo' | 'intervals' | 'race' | 'recovery';
+
+/** A manual lap: the distance and moving time covered within it. */
+export type Lap = { distanceM: number; movingMs: number };
+
+export type Shoe = {
+  id: string;
+  name: string;
+  /** Retired shoes keep their mileage but aren't offered for new runs. */
+  retired: boolean;
+  addedAt: number;
+};
+
+/*
+ * Fields added after the first release (type, laps, shoeId) are optional so
+ * runs saved by older versions keep loading.
+ */
 export type Run = {
   id: string;
   title: string;
@@ -50,6 +67,11 @@ export type Run = {
   bestEfforts: Partial<Record<BestEffortKey, number>>;
   /** Recorded with the web demo's simulated GPS rather than a real device. */
   simulated?: boolean;
+  /** Kind of workout; treated as 'easy' when missing. */
+  type?: RunType;
+  /** Manual laps, in order. The last one runs from the final Lap press to Finish. */
+  laps?: Lap[];
+  shoeId?: string;
 };
 
 export type Profile = {
@@ -65,4 +87,10 @@ export type Profile = {
   autoPause: boolean;
   /** Count down 3-2-1 before recording starts. */
   countdown: boolean;
+  /** Voice identifier for spoken cues, or null to pick the best one automatically. */
+  voiceId: string | null;
+  /** Speech rate multiplier, 1 = the platform's normal speed. */
+  speechRate: number;
+  /** Shoe preselected for new runs. */
+  defaultShoeId: string | null;
 };

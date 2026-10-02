@@ -1,11 +1,13 @@
 import { useSyncExternalStore } from 'react';
 
-import type { Profile, Run } from '@/lib/types';
+import { normaliseRun } from '@/lib/runs';
+import type { Profile, Run, Shoe } from '@/lib/types';
 import { kv } from './storage';
 
 const RUN_IDS_KEY = 'runs:ids';
 const runKey = (id: string) => `run:${id}`;
 const PROFILE_KEY = 'profile';
+const SHOES_KEY = 'shoes';
 
 export const DEFAULT_PROFILE: Profile = {
   name: 'Runner',
@@ -15,6 +17,9 @@ export const DEFAULT_PROFILE: Profile = {
   audioCues: true,
   autoPause: false,
   countdown: true,
+  voiceId: null,
+  speechRate: 1,
+  defaultShoeId: null,
 };
 
 type Listener = () => void;
@@ -55,10 +60,13 @@ const runsStore = createStore<Run[]>(() => {
   return ids
     .map((id) => readJSON<Run>(runKey(id)))
     .filter((r): r is Run => r != null)
+    .map(normaliseRun)
     .sort((a, b) => b.startedAt - a.startedAt);
 });
 
 const profileStore = createStore<Profile>(() => ({ ...DEFAULT_PROFILE, ...readJSON<Partial<Profile>>(PROFILE_KEY) }));
+
+const shoesStore = createStore<Shoe[]>(() => readJSON<Shoe[]>(SHOES_KEY) ?? []);
 
 function persistIds(runs: Run[]) {
   kv.set(RUN_IDS_KEY, JSON.stringify(runs.map((r) => r.id)));
@@ -71,7 +79,7 @@ export function saveRun(run: Run) {
   runsStore.set(next);
 }
 
-export function updateRun(id: string, patch: Partial<Pick<Run, 'title' | 'notes' | 'effort'>>) {
+export function updateRun(id: string, patch: Partial<Pick<Run, 'title' | 'notes' | 'effort' | 'type' | 'shoeId'>>) {
   const run = runsStore.get().find((r) => r.id === id);
   if (run) saveRun({ ...run, ...patch });
 }
@@ -89,6 +97,38 @@ export function updateProfile(patch: Partial<Profile>) {
   profileStore.set(next);
 }
 
+function persistShoes(next: Shoe[]) {
+  kv.set(SHOES_KEY, JSON.stringify(next));
+  shoesStore.set(next);
+}
+
+/** Adds or replaces a shoe. */
+export function saveShoe(shoe: Shoe) {
+  persistShoes([...shoesStore.get().filter((s) => s.id !== shoe.id), shoe].sort((a, b) => a.addedAt - b.addedAt));
+}
+
+export function addShoe(name: string, now = Date.now()): Shoe {
+  const shoe: Shoe = { id: `shoe-${now.toString(36)}-${Math.random().toString(36).slice(2, 6)}`, name, retired: false, addedAt: now };
+  saveShoe(shoe);
+  // The first shoe is the obvious default.
+  if (!profileStore.get().defaultShoeId) updateProfile({ defaultShoeId: shoe.id });
+  return shoe;
+}
+
+export function updateShoe(id: string, patch: Partial<Pick<Shoe, 'name' | 'retired'>>) {
+  const shoe = shoesStore.get().find((s) => s.id === id);
+  if (!shoe) return;
+  saveShoe({ ...shoe, ...patch });
+  // A retired shoe shouldn't be picked for new runs.
+  if (patch.retired && profileStore.get().defaultShoeId === id) updateProfile({ defaultShoeId: null });
+}
+
+/** Removes the shoe; runs that used it simply show no shoe. */
+export function deleteShoe(id: string) {
+  persistShoes(shoesStore.get().filter((s) => s.id !== id));
+  if (profileStore.get().defaultShoeId === id) updateProfile({ defaultShoeId: null });
+}
+
 export const getRuns = () => runsStore.get();
 export const getProfile = () => profileStore.get();
 
@@ -98,6 +138,10 @@ export function useRuns(): Run[] {
 
 export function useRun(id: string | undefined): Run | undefined {
   return useRuns().find((r) => r.id === id);
+}
+
+export function useShoes(): Shoe[] {
+  return useSyncExternalStore(shoesStore.subscribe, shoesStore.get, shoesStore.get);
 }
 
 export function useProfile(): Profile {

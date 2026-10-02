@@ -57,6 +57,22 @@ export function Button({ title, onPress, variant = 'primary', style, disabled }:
   );
 }
 
+/** A small selectable pill, for single-choice rows (run type, shoe, filters). */
+export function Chip({ label, selected, onPress, color }: { label: string; selected: boolean; onPress: () => void; color?: string }) {
+  const c = useColors();
+  const on = color ?? c.accent;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={[styles.chip, { backgroundColor: selected ? on : c.card, borderColor: selected ? on : c.border }]}
+    >
+      <Text style={[styles.chipText, { color: selected ? '#fff' : c.text }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 export function Empty({ title, body, children }: { title: string; body: string; children?: ReactNode }) {
   const c = useColors();
   return (
@@ -75,6 +91,8 @@ const styles = StyleSheet.create({
   statValue: { fontWeight: '800', fontVariant: ['tabular-nums'] },
   button: { borderRadius: 999, paddingVertical: 14, paddingHorizontal: 24, alignItems: 'center', borderWidth: 1 },
   buttonText: { fontSize: 16, fontWeight: '700' },
+  chip: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 7 },
+  chipText: { fontSize: 14, fontWeight: '600' },
   empty: { alignItems: 'center', padding: 32, gap: 8 },
   emptyTitle: { fontSize: 20, fontWeight: '700' },
   emptyBody: { fontSize: 15, textAlign: 'center', lineHeight: 21 },

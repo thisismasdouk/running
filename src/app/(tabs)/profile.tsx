@@ -3,14 +3,16 @@ import { router } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
+import { ShoeList } from '@/components/ShoeList';
 import { useColors } from '@/components/theme';
 import { Button, Card, SectionTitle, Stat } from '@/components/ui';
+import { VoiceSettings } from '@/components/VoiceSettings';
 import { confirm } from '@/lib/confirm';
 import { distanceUnit, formatDistanceValue } from '@/lib/format';
-import { sampleRuns } from '@/lib/sample';
+import { SAMPLE_SHOE, sampleRuns } from '@/lib/sample';
 import { totals, unitLength } from '@/lib/stats';
 import type { Units } from '@/lib/types';
-import { deleteRun, saveRun, updateProfile, useProfile, useRuns } from '@/store';
+import { deleteRun, deleteShoe, saveRun, saveShoe, updateProfile, useProfile, useRuns } from '@/store';
 
 export default function Profile() {
   const c = useColors();
@@ -35,7 +37,9 @@ export default function Profile() {
     if (hasSamples) {
       if (!(await confirm('Remove sample runs?', 'Your own runs are kept.', 'Remove', true))) return;
       runs.filter((r) => r.id.startsWith('sample-')).forEach((r) => deleteRun(r.id));
+      deleteShoe(SAMPLE_SHOE.id);
     } else {
+      saveShoe(SAMPLE_SHOE);
       sampleRuns().forEach(saveRun);
     }
   };
@@ -113,6 +117,12 @@ export default function Profile() {
           onChange={(countdown) => updateProfile({ countdown })}
         />
       </Card>
+
+      <SectionTitle>Voice</SectionTitle>
+      <VoiceSettings profile={profile} />
+
+      <SectionTitle>Shoes</SectionTitle>
+      <ShoeList runs={runs} units={units} defaultShoeId={profile.defaultShoeId} />
 
       <SectionTitle>Try it out</SectionTitle>
       <Card style={{ gap: 12 }}>

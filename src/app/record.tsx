@@ -15,7 +15,7 @@ import { distanceUnit, formatDistanceValue, formatDuration, formatPaceValue, pac
 import { FIRST_FIX_ACCURACY_M, MAX_ACCURACY_M } from '@/lib/geo';
 import { gps, gpsSignal, useGps } from '@/lib/gps';
 import { goBack } from '@/lib/nav';
-import { currentPace, currentSplit, movingMs, recorder, useRecorder } from '@/lib/recorder';
+import { currentLap, currentPace, currentSplit, movingMs, recorder, useRecorder } from '@/lib/recorder';
 import { buildRun } from '@/lib/runs';
 import { paceSecPerKm } from '@/lib/stats';
 import {
@@ -30,7 +30,7 @@ import {
   type AccessResult,
 } from '@/lib/tracking';
 import type { TrackPoint } from '@/lib/types';
-import { saveRun, useProfile } from '@/store';
+import { saveRun, useProfile, useShoes } from '@/store';
 
 const KEEP_AWAKE_TAG = 'run';
 const IS_WEB = Platform.OS === 'web';
@@ -64,6 +64,7 @@ export default function Record() {
   const rec = useRecorder();
   const g = useGps();
   const profile = useProfile();
+  const shoes = useShoes();
   const units = profile.units;
   const [access, setAccess] = useState<AccessResult | null>(null);
   const [lastKnown, setLastKnown] = useState<TrackPoint | null>(null);
@@ -218,6 +219,11 @@ export default function Record() {
     stopTracking();
   };
 
+  // The "Lap N" cue is spoken by useRunFeedback from the recorder's lap event.
+  const lap = () => {
+    recorder.lap();
+  };
+
   const pause = () => {
     recorder.pause();
     say('Paused.');
@@ -261,7 +267,9 @@ export default function Record() {
     stopping.current = true;
     await stopTracking();
     const run = buildRun(recorder.finish());
-    saveRun(run);
+    // The default shoe is preselected; the save screen can change it.
+    const shoe = shoes.find((x) => x.id === profile.defaultShoeId && !x.retired);
+    saveRun(shoe ? { ...run, shoeId: shoe.id } : run);
     router.replace({ pathname: '/edit/[id]', params: { id: run.id, fresh: '1' } });
   };
 
@@ -277,6 +285,7 @@ export default function Record() {
   const livePace = currentPace(rec);
   const avgPace = paceSecPerKm(rec.distanceM, moving);
   const split = currentSplit(rec, now);
+  const liveLap = rec.lapMarks.length > 0 ? currentLap(rec, now) : null;
   // The first fix of a segment must meet the recorder's stricter first-fix accuracy, so only call
   // the signal "ready" at that accuracy until the current segment has its first point.
   const lastSeg = rec.segments[rec.segments.length - 1];
@@ -346,6 +355,11 @@ export default function Record() {
                     Last {distanceUnit(units)} {formatDuration(rec.lastSplit.ms)}
                   </Text>
                 )}
+                {liveLap && (
+                  <Text style={[styles.split, { color: c.accent }]} accessibilityLabel={`Lap ${liveLap.index} in progress`}>
+                    LAP {liveLap.index} · {formatDuration(liveLap.ms)} · {formatDistanceValue(liveLap.distanceM, units)} {distanceUnit(units)}
+                  </Text>
+                )}
               </View>
             )}
             <Hint
@@ -369,7 +383,14 @@ export default function Record() {
                   disabled={busy || countdown != null || access?.access !== 'granted'}
                 />
               )}
-              {rec.status === 'recording' && <RoundButton label="Pause" onPress={pause} color={c.text} icon="pause" />}
+              {rec.status === 'recording' && (
+                <>
+                  <RoundButton label="Lap" onPress={lap} color={c.accent} icon="timer-outline" small />
+                  <RoundButton label="Pause" onPress={pause} color={c.text} icon="pause" />
+                  {/* Keeps Pause centred. */}
+                  <View style={styles.spacer} />
+                </>
+              )}
               {rec.status === 'paused' && (
                 <>
                   <RoundButton label="Discard" onPress={discard} color={c.danger} icon="trash" small />
@@ -605,6 +626,7 @@ const styles = StyleSheet.create({
   splitRow: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', columnGap: 16, rowGap: 4, marginTop: -6 },
   split: { fontSize: 13, fontWeight: '600', fontVariant: ['tabular-nums'] },
   controls: { flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center', marginTop: 4 },
+  spacer: { width: 64 },
   hint: { textAlign: 'center', fontSize: 13, lineHeight: 18 },
   access: { gap: 12 },
   accessTitle: { fontSize: 18, fontWeight: '700', textAlign: 'center' },

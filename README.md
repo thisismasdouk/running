@@ -9,14 +9,18 @@ A running tracker for iOS and Android, built with Expo (SDK 57) and Expo Router.
 - **Keeps tracking with the screen locked**, using OS-managed location updates. On Android that's a foreground-service notification, with no "Allow all the time" permission needed. On iOS it's the location background mode with the blue indicator, and works with "While Using". "Always" is offered once, at your first Start, and is optional. If background updates aren't available (Expo Go), it falls back to a foreground watcher and tells you to keep the app open.
 - **Survives the app being killed**: the in-progress run is saved to disk, and GPS resumes on relaunch. The background task is registered in the app entry, so Android can deliver fixes headlessly.
 - **GPS noise filtering**: inaccurate fixes and impossible jumps are dropped, a segment only starts from a good fix, long signal gaps don't become straight lines, and elevation gain uses a hysteresis threshold so altitude jitter doesn't add up to fake climbing.
-- **Voice cues** at every km or mile with total time, split pace and average pace, plus "Paused"/"Resumed" (expo-speech). Split haptics too.
+- **Voice cues** at every km or mile, phrased the way a coach would say them ("One kilometre. Five minutes twenty-nine per kilometre. Total time five minutes twenty-nine."), plus lap, "Paused" and "Resumed" cues (expo-speech). Split haptics too.
+- **Natural voice**: picks the best installed voice automatically (Premium/Enhanced first, then Siri, never the novelty voices). The You tab lists the voices for your language with their quality, has a speed control and a *Test voice* button, and explains where to download better voices on iPhone.
+- **Manual laps**: a Lap button while recording, with the current lap's time and distance shown live and a "Lap 3" cue. Laps are saved with the run and shown as a table.
 - **Auto-pause** (optional): the clock stops while you stand still at a crossing and restarts when you run off.
 - **3-2-1 countdown** before recording (tap to skip), so GPS can lock on while you put the phone away.
 - **Activity feed**: run cards with route thumbnails, a weekly-goal progress bar and a weekly streak.
-- **Run details**: route map, splits table with pace bars, elevation profile, best efforts, notes and perceived effort (1–10).
+- **Run details**: route map, splits table with pace bars, pace chart (smoothed over 200 m, faster is higher), laps, elevation profile, best efforts, notes and perceived effort (1–10).
+- **Run types**: easy, long, tempo, intervals, race or recovery, chosen when saving. Shown as a badge, and the Home feed can be filtered by type.
+- **Shoes**: add your shoes in the You tab, pick a default, and choose the pair for each run. Each shoe shows its total distance and warns past 600 km (375 mi). Retire or delete old pairs.
 - **Personal records**: the fastest 400m, 1K, mile, 5K, 10K, half and full marathon found anywhere inside your runs, not only whole-run times.
 - **Progress**: 12-week mileage chart, plus month, year and all-time totals.
-- **Settings**: km or miles, weekly goal, split alerts, voice cues, auto-pause, countdown, and sample runs to explore the app before your first run.
+- **Settings**: km or miles, weekly goal, split alerts, voice cues, voice and speed, auto-pause, countdown, and sample runs to explore the app before your first run.
 - **Web demo mode**: in a browser that can't provide a real location (sandboxed previews, desktop without location), the Record screen offers **Simulate a run**. It feeds realistic moving GPS points through the same recorder, so the whole record → pause → resume → finish → save flow can be tried. Simulated runs are labelled as such. This option never appears on iOS or Android.
 - Light and dark mode.
 
@@ -50,7 +54,7 @@ Android dev and release builds need a Google Maps API key for `react-native-maps
 ## Development
 
 ```bash
-npm test            # unit tests (GPS math, splits, best efforts, recorder incl. auto-pause, cues, simulator)
+npm test            # unit tests (GPS math, splits, best efforts, recorder incl. auto-pause and laps, cues, voices, pace chart, shoes, simulator)
 npm run typecheck
 npm run lint
 npm run doctor      # expo-doctor
@@ -85,6 +89,10 @@ src/lib/            logic with no UI
   gps.ts            live GPS signal status
   simulator.ts      web demo GPS
   cues.ts           spoken cue text; feedback.ts speaks it
+  voices.ts         ranks speech voices for the picker and Automatic
+  laps.ts, pace.ts  manual laps, smoothed pace-over-distance series
+  shoes.ts          shoe mileage and wear warnings
+  runs.ts           builds runs from recordings, run types, normalises old runs
   geo.ts, stats.ts  GPS math, splits, best efforts, records
 src/components/     maps, charts, cards, dialogs, theme
 src/store/          on-device persistence

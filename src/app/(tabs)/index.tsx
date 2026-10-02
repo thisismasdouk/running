@@ -1,14 +1,16 @@
 import { router } from 'expo-router';
-import { useCallback, useMemo } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { FlatList, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { RecordingBanner } from '@/components/RecordingBanner';
 import { RunCard } from '@/components/RunCard';
+import { RUN_TYPE_COLORS } from '@/components/RunTypeBadge';
 import { useColors } from '@/components/theme';
-import { Button, Card, Empty, Stat } from '@/components/ui';
+import { Button, Card, Chip, Empty, Stat } from '@/components/ui';
 import { distanceUnit, formatDistanceValue, formatDuration } from '@/lib/format';
+import { RUN_TYPES, runTypeLabel, runTypeOf } from '@/lib/runs';
 import { personalRecords, weeklySummaries, weekStreak } from '@/lib/stats';
-import type { Run } from '@/lib/types';
+import type { Run, RunType } from '@/lib/types';
 import { useProfile, useRuns } from '@/store';
 
 const Separator = () => <View style={{ height: 12 }} />;
@@ -18,6 +20,8 @@ export default function Home() {
   const runs = useRuns();
   const profile = useProfile();
   const units = profile.units;
+  const [filter, setFilter] = useState<RunType | null>(null);
+  const shown = useMemo(() => (filter ? runs.filter((r) => runTypeOf(r) === filter) : runs), [runs, filter]);
 
   const week = useMemo(() => weeklySummaries(runs, 1)[0], [runs]);
   const streak = useMemo(() => weekStreak(runs), [runs]);
@@ -56,6 +60,20 @@ export default function Home() {
           </Text>
         </View>
       </Card>
+      {runs.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          <Chip label="All" selected={filter == null} onPress={() => setFilter(null)} />
+          {RUN_TYPES.map((t) => (
+            <Chip
+              key={t.key}
+              label={t.label}
+              selected={filter === t.key}
+              color={RUN_TYPE_COLORS[t.key]}
+              onPress={() => setFilter(filter === t.key ? null : t.key)}
+            />
+          ))}
+        </ScrollView>
+      )}
     </View>
   );
 
@@ -63,15 +81,21 @@ export default function Home() {
     <FlatList
       style={{ backgroundColor: c.bg }}
       contentContainerStyle={styles.list}
-      data={runs}
+      data={shown}
       keyExtractor={(r) => r.id}
       ListHeaderComponent={header}
       ItemSeparatorComponent={Separator}
       renderItem={renderItem}
       ListEmptyComponent={
-        <Empty title="No runs yet" body="Lace up and record your first run. Your activities, splits and records will show up here.">
-          <Button title="Start a run" onPress={() => router.push('/record')} style={{ marginTop: 12 }} />
-        </Empty>
+        filter ? (
+          <Empty title={`No ${runTypeLabel(filter).toLowerCase()} runs`} body="Set a run's type when you save or edit it.">
+            <Button title="Show all runs" onPress={() => setFilter(null)} variant="secondary" style={{ marginTop: 12 }} />
+          </Empty>
+        ) : (
+          <Empty title="No runs yet" body="Lace up and record your first run. Your activities, splits and records will show up here.">
+            <Button title="Start a run" onPress={() => router.push('/record')} style={{ marginTop: 12 }} />
+          </Empty>
+        )
       }
     />
   );
@@ -82,5 +106,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardTitle: { fontSize: 18, fontWeight: '700' },
   track: { height: 8, borderRadius: 4, overflow: 'hidden' },
+  chips: { gap: 8, paddingVertical: 2 },
   fill: { height: 8, borderRadius: 4 },
 });

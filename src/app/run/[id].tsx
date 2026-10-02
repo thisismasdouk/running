@@ -3,16 +3,19 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { ElevationChart, SplitsTable } from '@/components/charts';
+import { ElevationChart, LapsTable, PaceChart, SplitsTable } from '@/components/charts';
 import { RouteMap } from '@/components/RouteMap';
+import { RunTypeBadge } from '@/components/RunTypeBadge';
 import { useColors } from '@/components/theme';
 import { Card, Empty, SectionTitle, Stat } from '@/components/ui';
 import { confirm } from '@/lib/confirm';
 import { distanceUnit, formatDateTime, formatDistanceValue, formatDuration, formatElevation, formatPace, formatPaceValue, paceUnit } from '@/lib/format';
 import { progressSeries } from '@/lib/geo';
 import { goBack } from '@/lib/nav';
+import { paceSeries } from '@/lib/pace';
+import { runTypeOf } from '@/lib/runs';
 import { BEST_EFFORTS, computeSplits, paceSecPerKm, prsSetBy } from '@/lib/stats';
-import { deleteRun, useProfile, useRun, useRuns } from '@/store';
+import { deleteRun, useProfile, useRun, useRuns, useShoes } from '@/store';
 
 export default function RunDetail() {
   const c = useColors();
@@ -23,6 +26,8 @@ export default function RunDetail() {
 
   const splits = useMemo(() => (run ? computeSplits(run.segments, units) : []), [run, units]);
   const samples = useMemo(() => (run ? progressSeries(run.segments) : []), [run]);
+  const pace = useMemo(() => paceSeries(samples), [samples]);
+  const shoes = useShoes();
   const prs = useMemo(() => (run ? new Set(prsSetBy(run, runs)) : new Set<string>()), [run, runs]);
 
   if (!run) {
@@ -37,6 +42,8 @@ export default function RunDetail() {
 
   const efforts = BEST_EFFORTS.filter((e) => run.bestEfforts[e.key] != null);
   const hasRoute = run.segments.some((s) => s.length > 1);
+  const shoe = run.shoeId ? shoes.find((s) => s.id === run.shoeId) : undefined;
+  const avgPace = paceSecPerKm(run.distanceM, run.movingMs);
 
   return (
     <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ paddingBottom: 48 }}>
@@ -60,7 +67,16 @@ export default function RunDetail() {
       <View style={styles.body}>
         <View style={{ gap: 4 }}>
           <Text style={[styles.title, { color: c.text }]}>{run.title}</Text>
-          <Text style={{ color: c.muted }}>{formatDateTime(run.startedAt)}</Text>
+          <View style={styles.meta}>
+            <RunTypeBadge type={runTypeOf(run)} />
+            <Text style={{ color: c.muted }}>{formatDateTime(run.startedAt)}</Text>
+          </View>
+          {shoe && (
+            <View style={styles.meta}>
+              <Ionicons name="footsteps-outline" size={14} color={c.muted} />
+              <Text style={{ color: c.muted }}>{shoe.name}</Text>
+            </View>
+          )}
           {run.simulated && <Text style={{ color: c.muted, fontWeight: '700' }}>Recorded with simulated GPS (demo)</Text>}
           {run.notes ? <Text style={[styles.notes, { color: c.text }]}>{run.notes}</Text> : null}
         </View>
@@ -70,7 +86,7 @@ export default function RunDetail() {
             <Stat label="Distance" value={formatDistanceValue(run.distanceM, units)} unit={distanceUnit(units)} size="lg" />
           </View>
           <View style={styles.cell}>
-            <Stat label="Avg pace" value={formatPaceValue(paceSecPerKm(run.distanceM, run.movingMs), units)} unit={paceUnit(units)} size="lg" />
+            <Stat label="Avg pace" value={formatPaceValue(avgPace, units)} unit={paceUnit(units)} size="lg" />
           </View>
           <View style={styles.cell}>
             <Stat label="Moving time" value={formatDuration(run.movingMs)} size="lg" />
@@ -91,6 +107,24 @@ export default function RunDetail() {
             <SectionTitle>Splits</SectionTitle>
             <Card>
               <SplitsTable splits={splits} units={units} />
+            </Card>
+          </>
+        )}
+
+        {pace.length > 1 && (
+          <>
+            <SectionTitle>Pace</SectionTitle>
+            <Card>
+              <PaceChart series={pace} avgPace={avgPace} units={units} />
+            </Card>
+          </>
+        )}
+
+        {run.laps && run.laps.length > 0 && (
+          <>
+            <SectionTitle>Laps</SectionTitle>
+            <Card>
+              <LapsTable laps={run.laps} units={units} />
             </Card>
           </>
         )}
@@ -133,6 +167,7 @@ const styles = StyleSheet.create({
   map: { height: 280 },
   body: { padding: 16, gap: 12 },
   title: { fontSize: 26, fontWeight: '800' },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   notes: { fontSize: 15, lineHeight: 21, marginTop: 6 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 16 },
   cell: { width: '50%' },

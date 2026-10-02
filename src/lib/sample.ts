@@ -1,5 +1,10 @@
+import { progressSeries } from './geo';
+import { lapsFromMarks } from './laps';
 import { buildRun } from './runs';
-import type { Run, Segment } from './types';
+import type { Lap, Run, RunType, Segment, Shoe } from './types';
+
+/** The shoe the sample runs were "run" in; added and removed along with them. */
+export const SAMPLE_SHOE: Shoe = { id: 'sample-shoe', name: 'Sample trainers', retired: false, addedAt: 0 };
 
 /** Tiny seeded PRNG so sample data is stable between reloads. */
 function rng(seed: number) {
@@ -42,6 +47,23 @@ export function sampleRun(startedAt: number, km: number, paceSecPerKm: number, s
   return buildRun({ startedAt, segments: [seg], movingMs: t - startedAt, elapsedMs: t - startedAt + 30_000 });
 }
 
+/** Laps as if Lap had been pressed every `everyM` metres. */
+function lapsEvery(run: Run, everyM: number): Lap[] {
+  const samples = progressSeries(run.segments);
+  const marks = [];
+  let next = everyM;
+  for (const p of samples) {
+    if (p.d >= next) {
+      marks.push({ distanceM: p.d, movingMs: p.t });
+      next += everyM;
+    }
+  }
+  const end = samples[samples.length - 1];
+  return lapsFromMarks(marks, { distanceM: end.d, movingMs: end.t });
+}
+
+const SAMPLE_TYPES: RunType[] = ['easy', 'tempo', 'intervals', 'long', 'easy', 'recovery', 'long', 'easy', 'long', 'intervals', 'tempo', 'easy', 'race'];
+
 /** A few weeks of plausible training so the app can be explored without running first. */
 export function sampleRuns(now = Date.now()): Run[] {
   const plan: [daysAgo: number, hour: number, km: number, pace: number][] = [
@@ -64,6 +86,16 @@ export function sampleRuns(now = Date.now()): Run[] {
     d.setDate(d.getDate() - daysAgo);
     d.setHours(hour, 5 + i * 3, 0, 0);
     const run = sampleRun(d.getTime(), km, pace, i + 1);
-    return { ...run, id: `sample-${i}`, notes: i === 0 ? 'Crisp morning, felt strong on the last km.' : '', effort: 3 + (i % 6) };
+    const type = SAMPLE_TYPES[i];
+    return {
+      ...run,
+      id: `sample-${i}`,
+      notes: i === 0 ? 'Crisp morning, felt strong on the last km.' : i === 2 ? '5 × 800 m with the Lap button.' : '',
+      effort: 3 + (i % 6),
+      type,
+      // Older runs predate the shoe, like a real log would.
+      ...(i < 10 ? { shoeId: SAMPLE_SHOE.id } : {}),
+      ...(type === 'intervals' ? { laps: lapsEvery(run, 800) } : type === 'tempo' ? { laps: lapsEvery(run, 2000) } : {}),
+    };
   });
 }

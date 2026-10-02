@@ -1,5 +1,5 @@
 // jest.mock calls are hoisted above these imports by babel-jest.
-import { __resetRecorder, currentPace, currentSplit, movingMs, recorder, type RecorderEvent } from '../recorder';
+import { __resetRecorder, currentLap, currentPace, currentSplit, movingMs, recorder, type RecorderEvent } from '../recorder';
 import type { TrackPoint } from '../types';
 import { straightRun } from '@/test/helpers';
 import { haversine, totalDistance } from '../geo';
@@ -178,6 +178,75 @@ describe('recorder', () => {
       recorder.pause(60_000);
       expect(recorder.get().autoPaused).toBe(false);
       expect(recorder.get().status).toBe('paused');
+    });
+  });
+
+  describe('laps', () => {
+    it('records lap boundaries and reports the lap in progress', () => {
+      const events: RecorderEvent[] = [];
+      recorder.on((e) => events.push(e));
+      recorder.start(0);
+      const pts = straightRun(1000, 300);
+      recorder.addPoints(pts.filter((p) => p.t <= 120_000));
+      const first = recorder.lap(120_000);
+      expect(first?.index).toBe(1);
+      expect(first?.movingMs).toBe(120_000);
+      expect(first?.distanceM).toBeCloseTo(400, -1);
+      expect(events.filter((e) => e.type === 'lap')).toHaveLength(1);
+
+      recorder.addPoints(pts.filter((p) => p.t > 120_000 && p.t <= 180_000));
+      const live = currentLap(recorder.get(), 180_000);
+      expect(live.index).toBe(2);
+      expect(live.ms).toBe(60_000);
+      expect(live.distanceM).toBeCloseTo(200, -1);
+    });
+
+    it('ignores a double tap and presses while paused or idle', () => {
+      expect(recorder.lap(0)).toBeNull();
+      recorder.start(0);
+      recorder.addPoints(straightRun(200, 300));
+      expect(recorder.lap(60_000)).not.toBeNull();
+      expect(recorder.lap(60_400)).toBeNull();
+      recorder.pause(70_000);
+      expect(recorder.lap(80_000)).toBeNull();
+      expect(recorder.get().lapMarks).toHaveLength(1);
+    });
+
+    it('lap times are moving time, excluding pauses', () => {
+      recorder.start(0);
+      recorder.addPoints(straightRun(300, 300));
+      recorder.pause(90_000);
+      recorder.resume(200_000);
+      const lap = recorder.lap(230_000);
+      expect(lap?.movingMs).toBe(120_000);
+    });
+
+    it('finishing closes the last lap and returns all laps', () => {
+      recorder.start(0);
+      const pts = straightRun(1000, 300);
+      recorder.addPoints(pts.filter((p) => p.t <= 150_000));
+      recorder.lap(150_000);
+      recorder.addPoints(pts.filter((p) => p.t > 150_000));
+      const result = recorder.finish(300_000);
+      expect(result.laps).toHaveLength(2);
+      expect(result.laps[0].movingMs + result.laps[1].movingMs).toBe(300_000);
+      expect(result.laps[0].distanceM + result.laps[1].distanceM).toBeCloseTo(1000, 0);
+    });
+
+    it('a run without Lap presses has no laps', () => {
+      recorder.start(0);
+      recorder.addPoints(straightRun(500, 300));
+      expect(recorder.finish(150_000).laps).toEqual([]);
+    });
+
+    it('keeps laps across a reload', () => {
+      recorder.start(0);
+      recorder.addPoints(straightRun(300, 300));
+      recorder.lap(60_000);
+      const saved = mockStore.get('recorder');
+      __resetRecorder();
+      if (saved) mockStore.set('recorder', saved);
+      expect(recorder.get().lapMarks).toHaveLength(1);
     });
   });
 });
