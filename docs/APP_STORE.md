@@ -18,7 +18,7 @@ This is the step-by-step checklist for shipping Pacebook with EAS. Everything th
 | App icon, Android adaptive icon (foreground, background, monochrome), splash, favicon | `assets/`, regenerate with `npm run icons` |
 | Google Maps key for Android read from an environment variable | `app.config.js` |
 | HealthKit: capability and entitlement, purpose strings for reading heart rate and saving workouts, no background delivery. HealthKit isn't in Expo Go, so the app loads it only in development and App Store builds | `@kingstinct/react-native-healthkit` plugin in `app.json`, `src/lib/health.ios.ts` |
-| Camera and photo-library purpose strings (meal photos); microphone permission removed. The OpenAI key is never bundled: it's stored per device with `expo-secure-store`, or kept on a proxy (`server/openai-proxy`) | `expo-image-picker` and `expo-secure-store` plugins, `src/lib/food-ai.ts` |
+| Camera and photo-library purpose strings (meal photos); microphone permission removed. The OpenAI key is never bundled: it's stored per device with `expo-secure-store`, or kept on the Pacebook AI server (`server/calorie-server`, Sign in with Apple, daily limit per user) | `expo-image-picker` and `expo-secure-store` plugins, `src/lib/food-ai.ts` |
 | "Continue with ChatGPT" (Sign in with ChatGPT, PKCE, no client secret): tokens in the Keychain, redirect `pacebook://auth/callback`. Hidden until a client ID is set | `extra.chatgpt` in `app.json`, `src/lib/chatgpt.ts`, `src/lib/chatgpt-auth.ts`, `expo-web-browser` plugin |
 | In-app privacy policy | `src/app/privacy.tsx` (and `docs/PRIVACY.md` to host) |
 
@@ -115,20 +115,21 @@ Suggested text. Avoid naming other apps or brands (e.g. "Strava") anywhere in th
 
 ### App Privacy ("nutrition label")
 
-Because meal photos can be sent to OpenAI (a third party that may keep them up to 30 days), declare:
+Meal photos go to OpenAI (which may keep them up to 30 days), and with Pacebook AI they pass through your server under the person's Sign in with Apple identifier. Declare:
 
-- **Photos or Videos** → *App Functionality*, **not linked** to the user, **not used for tracking**.
+- **User ID** (the Apple identifier kept by the Pacebook AI server) → *App Functionality*, **linked** to the user, **not used for tracking**.
+- **Photos or Videos** → *App Functionality*, **linked**, **not used for tracking**.
 - **Other User Content** (the optional note typed with a photo) → same answers.
 
-Once "Continue with ChatGPT" is live, a photo sent on a ChatGPT plan travels with that person's sign-in token, so OpenAI can tie it to their account. Change both types to **linked** to the user in the label and set `NSPrivacyCollectedDataTypeLinked` to `true` for them in `app.json` in the same release that adds the client ID. The email address and account identifier that OpenAI returns at sign-in stay in the Keychain and are never sent to you, so they aren't "collected" by the app.
+These match `ios.privacyManifests.NSPrivacyCollectedDataTypes` in `app.json`. With "Continue with ChatGPT", the email address and account identifier that OpenAI returns at sign-in stay in the Keychain and are never sent to you, so they aren't "collected" by the app.
 
 Everything else stays on the device and isn't "collected":
 
 - Location and run data are processed and stored only on the device (on-device processing is not "collection" under Apple's definition).
-- There is no account, analytics, crash reporting SDK, advertising or server.
+- There is no analytics, crash reporting SDK or advertising. The only account is the optional Pacebook AI one, which can be deleted in the app.
 - Apple Health data (heart rate read, workouts written) stays on the device too.
 
-Add the same types to `ios.privacyManifests.NSPrivacyCollectedDataTypes` (`NSPrivacyCollectedDataTypePhotosorVideos` and `NSPrivacyCollectedDataTypeOtherUserContent`, purpose `NSPrivacyCollectedDataTypePurposeAppFunctionality`, not linked, not tracking); this is already done in `app.json`. If you add analytics or crash reporting later, update both the label and `ios.privacyManifests`.
+If you add analytics or crash reporting later, update both the label and `ios.privacyManifests`.
 
 ### Screenshots
 
@@ -156,9 +157,9 @@ Paste something like:
 >
 > HealthKit: optional, off by default (You → Apple Health). When on, each run is saved to Health as a running workout with its route, and heart rate for the run's time window is read to show average/max heart rate and zones on the run screen. Health data is stored only on the device and never used for advertising.
 >
-> Food tab: meals can be logged by hand, or estimated from a photo with OpenAI. Before the first photo is sent, the app explains that the photo goes to OpenAI and asks for consent (guideline 5.1.2(i)); consent can be withdrawn in Food → Settings. No API key ships in the app: the user adds their own OpenAI key (stored in the Keychain) or the app uses our calorie server. [For review, either configure the calorie server URL in this build, or provide a test key here.] Sample meals load with "Load sample runs".
+> Food tab: meals can be logged by hand, or estimated from a photo with OpenAI. Before the first photo is sent, the app explains that the photo goes to OpenAI and asks for consent (guideline 5.1.2(i)); consent can be withdrawn in Food → Settings. No API key ships in the app: by default the user signs in with Apple to use our Pacebook AI server (a daily allowance per user; the server holds the OpenAI key and doesn't store photos), or adds their own OpenAI key (stored in the Keychain). The Pacebook AI account can be deleted in Food → Settings → Delete account (guideline 5.1.1(v)). Reviewers can sign in with Apple on the review device. Sample meals load with "Load sample runs".
 >
-> Continue with ChatGPT (Food → Settings): optional. It connects the user's own ChatGPT account through OpenAI's sign-in page (ASWebAuthenticationSession, OAuth with PKCE) so meal-photo estimates use their ChatGPT plan instead of an API key. Pacebook has no account of its own and this is not a login to Pacebook: every feature works without it, so no account creation or deletion applies, and it is a sign-in to a specific third-party service rather than a general login option (guideline 4.8). Signing out in the same screen revokes the session with OpenAI and deletes the tokens from the Keychain. Pacebook does not sell or charge for this; usage is covered by the user's existing ChatGPT plan. [Provide a ChatGPT test account here, or note that photo estimates can be reviewed with the calorie server instead.]
+> Continue with ChatGPT (Food → Settings): optional. It connects the user's own ChatGPT account through OpenAI's sign-in page (ASWebAuthenticationSession, OAuth with PKCE) so meal-photo estimates use their ChatGPT plan instead of an API key. It is a sign-in to a specific third-party service for that service's features, not a login to Pacebook, and Sign in with Apple is offered alongside it (guideline 4.8). Signing out in the same screen revokes the session with OpenAI and deletes the tokens from the Keychain. Pacebook does not sell or charge for this; usage is covered by the user's existing ChatGPT plan. [Provide a ChatGPT test account here, or note that photo estimates can be reviewed with the calorie server instead.]
 >
 > Apart from meal photos the user chooses to estimate, all data is stored on the device only.
 

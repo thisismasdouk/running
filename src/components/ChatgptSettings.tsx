@@ -68,7 +68,7 @@ export function ChatgptSettings({ onChange }: { onChange?: (planInUse: boolean) 
       const next = await signInWithChatgpt({ enablePlan });
       if (!next) return;
       apply(next);
-      if (!hasPlanAccess(next)) setMessage('Signed in, but ChatGPT plan use wasn’t allowed. Photo estimates use your OpenAI key or calorie server instead.');
+      if (!hasPlanAccess(next)) setMessage('Signed in, but ChatGPT plan use wasn’t allowed. Photo estimates use Pacebook AI or your OpenAI key instead.');
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'ChatGPT sign-in couldn’t be completed.');
     } finally {
@@ -77,7 +77,7 @@ export function ChatgptSettings({ onChange }: { onChange?: (planInUse: boolean) 
   };
 
   const leave = async () => {
-    if (!(await confirm('Sign out of ChatGPT?', 'Photo estimates will use your OpenAI key or calorie server, if you’ve set one.', 'Sign out', true))) return;
+    if (!(await confirm('Sign out of ChatGPT?', 'Photo estimates will use Pacebook AI or your OpenAI key, if you’ve set one up.', 'Sign out', true))) return;
     setBusy(true);
     const { revoked } = await signOut(chatgptConfig).catch(() => ({ revoked: false }));
     updateProfile({ chatgptModel: null });
@@ -123,7 +123,7 @@ export function ChatgptSettings({ onChange }: { onChange?: (planInUse: boolean) 
           ) : (
             <>
               <Text style={{ color: c.muted, lineHeight: 20 }}>
-                ChatGPT plan use isn’t turned on, so photo estimates use your OpenAI key or calorie server below.
+                ChatGPT plan use isn’t turned on, so photo estimates use Pacebook AI or your OpenAI key below.
               </Text>
               <Button title="Use my ChatGPT plan" onPress={() => signIn(true)} disabled={busy} />
             </>

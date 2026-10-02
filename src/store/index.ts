@@ -36,6 +36,7 @@ export const DEFAULT_PROFILE: Profile = {
   aiProxyUrl: null,
   aiConsentAt: null,
   chatgptModel: null,
+  aiUseOwnKey: false,
   chatgptWelcomeSeen: false,
 };
 

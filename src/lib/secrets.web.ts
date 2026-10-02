@@ -1,3 +1,4 @@
+import type { ServerSession } from './calorie-server';
 import type { ChatgptSession } from './chatgpt';
 
 // Browsers have no keychain; the key stays in this browser's local storage only.
@@ -41,3 +42,12 @@ export async function setChatgptSession(session: ChatgptSession): Promise<void> 
 export async function deleteChatgptSession(): Promise<void> {
   chatgptSession = null;
 }
+
+// Sign in with Apple only exists on iPhone, so the web build never holds a server session.
+export async function getServerSession(): Promise<ServerSession | null> {
+  return null;
+}
+
+export async function setServerSession(_session: ServerSession): Promise<void> {}
+
+export async function deleteServerSession(): Promise<void> {}

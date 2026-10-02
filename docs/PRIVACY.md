@@ -10,7 +10,7 @@ While you record a run, Pacebook uses your device's location (GPS) to draw your 
 
 ## Where it is stored
 
-Everything is stored only on your device. Pacebook has no account of its own, no server, no analytics and no advertising. Nothing you record is sent to the developer or to any third party, except meal photos you choose to have estimated (see below). When you choose to share a run image or export a GPX file, it goes only to the app you pick in the share sheet.
+Everything you record is stored only on your device. Pacebook has no analytics and no advertising, and no account unless you choose Pacebook AI (below). Nothing you record is sent to the developer or to any third party, except meal photos you choose to have estimated (see below). When you choose to share a run image or export a GPX file, it goes only to the app you pick in the share sheet.
 
 ## Location in the background
 
@@ -22,7 +22,11 @@ If you turn on Apple Health in the You tab, Pacebook saves your runs to Health a
 
 ## Food log and AI photo estimates
 
-The Food tab keeps a calorie and macro log on your device. If you use photo estimates, after you agree in the app the meal photo and any note you type are sent to OpenAI to estimate calories, and the answer comes back to your phone. They go one of three ways: on your ChatGPT plan if you signed in with ChatGPT, directly with your own API key, or through a calorie server set in Food settings. Nothing else is sent: no runs, location, name or health data. With an API key or calorie server, OpenAI does not use the data to train its models by default and may keep it for up to 30 days to prevent abuse. On your ChatGPT plan, OpenAI handles the photo and note under the terms and data settings of your ChatGPT account (openai.com/policies). You can withdraw consent, sign out or remove your key at any time in Food settings, and you can always log food by hand without AI.
+The Food tab keeps a calorie and macro log on your device. If you use photo estimates, after you agree in the app the meal photo and any note you type are sent to OpenAI to estimate calories, and the answer comes back to your phone. They go one of three ways: on your ChatGPT plan if you signed in with ChatGPT, through Pacebook AI if you signed in with Apple, or directly with your own API key. Nothing else is sent: no runs, location, name or health data. Through the API (your key or Pacebook AI), OpenAI does not use the data to train its models by default and may keep it for up to 30 days to prevent abuse. On your ChatGPT plan, OpenAI handles the photo and note under the terms and data settings of your ChatGPT account (openai.com/policies). You can withdraw consent, sign out or remove your key at any time in Food settings, and you can always log food by hand without AI.
+
+## Pacebook AI and Sign in with Apple
+
+Pacebook AI is optional and lets you estimate meal photos without an OpenAI key. You sign in with Apple; Pacebook asks Apple for no name or email, only a random user identifier that Apple creates for Pacebook. Our server keeps that identifier, when your account was created and how many photo estimates you used each day (kept for a week), so it can apply the daily allowance. Each photo and note is passed straight to OpenAI and is not stored on our server. You can sign out or delete your Pacebook AI account at any time in Food settings; deleting it removes the identifier and usage counts from the server.
 
 ## Sign in with ChatGPT
 
@@ -30,7 +34,7 @@ Signing in is optional and happens on OpenAI’s own sign-in page; Pacebook neve
 
 ## Deleting your data
 
-You can delete any run or food entry from its screen. Sign out of ChatGPT in Food settings to remove its sign-in tokens. Uninstalling Pacebook removes all of its data from your device.
+You can delete any run or food entry from its screen, and your Pacebook AI account in Food settings. Sign out of ChatGPT in Food settings to remove its sign-in tokens. Uninstalling Pacebook removes all of its data from your device.
 
 ## Children
 

@@ -103,11 +103,12 @@ describe('food AI', () => {
       return { ok: true, json: async () => completion({ is_food: true, name: 'Apple', items: [{ name: 'Apple', portion: '1', kcal: 95, protein_g: 0, carbs_g: 25, fat_g: 0 }], confidence: 'high', notes: '' }) };
     }) as unknown as typeof fetch;
     await analyseFoodPhoto('AAA', { apiKey: 'sk-test', proxyUrl: null, model: 'm' });
-    await analyseFoodPhoto('AAA', { apiKey: 'sk-test', proxyUrl: 'https://proxy.example/estimate', model: 'm' });
+    await analyseFoodPhoto('AAA', { apiKey: 'sk-test', proxyUrl: 'https://ai.example.com/', serverToken: 'session-1', model: 'm' });
     expect(calls[0].url).toBe('https://api.openai.com/v1/chat/completions');
     expect(calls[0].headers.Authorization).toBe('Bearer sk-test');
-    expect(calls[1].url).toBe('https://proxy.example/estimate');
-    expect(calls[1].headers.Authorization).toBeUndefined();
+    // The calorie server gets its own session token, never the OpenAI key.
+    expect(calls[1].url).toBe('https://ai.example.com/v1/estimate');
+    expect(calls[1].headers.Authorization).toBe('Bearer session-1');
     await expect(analyseFoodPhoto('AAA', { apiKey: null, proxyUrl: null, model: 'm' })).rejects.toThrow(/API key/);
   });
 });

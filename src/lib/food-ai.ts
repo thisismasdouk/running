@@ -1,3 +1,4 @@
+import { estimateUrl } from './calorie-server';
 import type { FoodItem, Totals } from './food';
 import { sumTotals } from './food';
 
@@ -10,7 +11,8 @@ import { sumTotals } from './food';
  *    OAuth access token, so usage counts against their ChatGPT plan;
  *  - straight to Chat Completions with a key the user entered on their own
  *    device (kept in the iOS Keychain / Android Keystore);
- *  - to a proxy server that adds the key (see server/openai-proxy).
+ *  - to the Pacebook calorie server (server/calorie-server), which holds
+ *    the key, after the person signs in with Apple there.
  * Only the photo and an optional note are sent.
  */
 
@@ -28,7 +30,9 @@ export type FoodAnalysis = Totals & {
 
 export type AiConfig = {
   apiKey: string | null;
+  /** The calorie server's base address, used with `serverToken`. */
   proxyUrl: string | null;
+  serverToken?: string | null;
   model: string;
   /** Set when signed in with ChatGPT with plan use allowed; the request then uses the plan and nothing else. */
   chatgpt?: { accessToken: string; model: string } | null;
@@ -120,8 +124,8 @@ export function buildPlanFoodRequest(imageDataUrl: string, model: string, note?:
 
 export class FoodAiError extends Error {
   /** What the error card should offer: ChatGPT usage settings, or signing in again. */
-  action?: 'manage-usage' | 'sign-in';
-  constructor(message: string, action?: 'manage-usage' | 'sign-in') {
+  action?: 'manage-usage' | 'sign-in' | 'server-sign-in';
+  constructor(message: string, action?: 'manage-usage' | 'sign-in' | 'server-sign-in') {
     super(message);
     this.action = action;
   }
@@ -165,7 +169,9 @@ function parseFoodJson(content: string): FoodAnalysis {
 /** A user-facing message for an HTTP error from OpenAI or the proxy. */
 export function describeHttpError(status: number, body: unknown, viaProxy: boolean): string {
   const apiMessage = (body as { error?: { message?: string; code?: string } })?.error;
-  if (status === 401) return viaProxy ? 'The calorie server refused the request (401). Check its URL and token.' : 'OpenAI rejected the API key. Check it in Food → AI settings.';
+  // The calorie server writes its own messages for people (daily limit, busy, signed out).
+  if (viaProxy && apiMessage?.message) return apiMessage.message;
+  if (status === 401) return viaProxy ? 'Sign in again to use Pacebook AI.' : 'OpenAI rejected the API key. Check it in Food → AI settings.';
   if (status === 429)
     return apiMessage?.code === 'insufficient_quota'
       ? 'Your OpenAI account is out of credit. Add credit at platform.openai.com/settings/organization/billing.'
@@ -282,9 +288,12 @@ export async function analyseFoodPhoto(base64Jpeg: string, config: AiConfig, not
   const body = buildFoodRequest(`data:image/jpeg;base64,${base64Jpeg}`, config.model || DEFAULT_AI_MODEL, note);
   let res: Response;
   try {
-    res = await fetch(viaProxy ? config.proxyUrl! : OPENAI_URL, {
+    res = await fetch(viaProxy ? estimateUrl(config.proxyUrl!) : OPENAI_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(viaProxy ? {} : { Authorization: `Bearer ${config.apiKey}` }) },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(viaProxy ? (config.serverToken ? { Authorization: `Bearer ${config.serverToken}` } : {}) : { Authorization: `Bearer ${config.apiKey}` }),
+      },
       body: JSON.stringify(body),
       signal,
     });
@@ -293,6 +302,9 @@ export async function analyseFoodPhoto(base64Jpeg: string, config: AiConfig, not
     throw new FoodAiError('Couldn’t reach the AI service. Check your internet connection.');
   }
   const json = await res.json().catch(() => null);
-  if (!res.ok) throw new FoodAiError(describeHttpError(res.status, json, viaProxy));
+  if (!res.ok) {
+    const signedOut = viaProxy && (res.status === 401 || (json as { error?: { code?: string } } | null)?.error?.code === 'sign_in_required');
+    throw new FoodAiError(describeHttpError(res.status, json, viaProxy), signedOut ? 'server-sign-in' : undefined);
+  }
   return parseFoodResponse(json);
 }

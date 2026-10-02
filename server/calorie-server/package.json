@@ -1,0 +1,16 @@
+{
+  "name": "pacebook-calorie-server",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Meal-photo calorie estimates for Pacebook: Sign in with Apple, a daily limit per user, and the OpenAI key kept on the server.",
+  "type": "module",
+  "engines": { "node": ">=22.13" },
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "jose": "^6.2.12"
+  }
+}

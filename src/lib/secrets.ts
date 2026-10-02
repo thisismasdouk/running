@@ -1,5 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 
+import type { ServerSession } from './calorie-server';
 import type { ChatgptSession } from './chatgpt';
 
 // Stored in the iOS Keychain / Android Keystore, never in the app's database or backups.
@@ -45,3 +46,18 @@ export async function setChatgptSession(session: ChatgptSession): Promise<void> 
 export async function deleteChatgptSession(): Promise<void> {
   await Promise.all([CHATGPT_SESSION, ...Object.values(CHATGPT_TOKENS)].map((key) => SecureStore.deleteItemAsync(key, DEVICE_ONLY)));
 }
+
+// Pacebook AI server session (Sign in with Apple). Device-only, like the ChatGPT tokens.
+const SERVER_SESSION = 'calorie-server-session';
+
+export async function getServerSession(): Promise<ServerSession | null> {
+  const raw = await SecureStore.getItemAsync(SERVER_SESSION, DEVICE_ONLY);
+  try {
+    return raw ? (JSON.parse(raw) as ServerSession) : null;
+  } catch {
+    return null;
+  }
+}
+
+export const setServerSession = (session: ServerSession) => SecureStore.setItemAsync(SERVER_SESSION, JSON.stringify(session), DEVICE_ONLY);
+export const deleteServerSession = () => SecureStore.deleteItemAsync(SERVER_SESSION, DEVICE_ONLY);

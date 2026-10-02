@@ -2,8 +2,11 @@ import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 import { ChatgptSettings } from '@/components/ChatgptSettings';
+import { ServerSettings } from '@/components/ServerSettings';
 import { useColors } from '@/components/theme';
 import { Button, Card, Chip, SectionTitle } from '@/components/ui';
+import { serverBase } from '@/lib/calorie-server';
+import { configuredServerUrl } from '@/lib/calorie-server-auth';
 import { confirm } from '@/lib/confirm';
 import { DEFAULT_AI_MODEL } from '@/lib/food-ai';
 import { deleteOpenAiKey, getOpenAiKey, KEY_STORAGE_LABEL, setOpenAiKey } from '@/lib/secrets';
@@ -18,8 +21,7 @@ export default function FoodSettings() {
   const profile = useProfile();
   const [savedKey, setSavedKey] = useState<string | null>(null);
   const [keyInput, setKeyInput] = useState('');
-  const [mode, setMode] = useState<'key' | 'proxy'>(profile.aiProxyUrl ? 'proxy' : 'key');
-  const [proxy, setProxy] = useState(profile.aiProxyUrl ?? '');
+  const [mode, setMode] = useState<'key' | 'server'>(serverBase(profile, configuredServerUrl) ? 'server' : 'key');
   const [model, setModel] = useState(profile.aiModel);
   const [message, setMessage] = useState('');
   const [planInUse, setPlanInUse] = useState(false);
@@ -35,7 +37,7 @@ export default function FoodSettings() {
       return;
     }
     await setOpenAiKey(key);
-    updateProfile({ aiProxyUrl: null });
+    updateProfile({ aiUseOwnKey: true });
     setSavedKey(key);
     setKeyInput('');
     setMessage('Key saved.');
@@ -48,20 +50,10 @@ export default function FoodSettings() {
     setMessage('Key removed.');
   };
 
-  const saveProxy = () => {
-    const url = proxy.trim();
-    if (!/^https:\/\/[^\s/]+/.test(url)) {
-      setMessage('Enter the server’s full https:// address.');
-      return;
-    }
-    updateProfile({ aiProxyUrl: url });
-    setMessage('Server saved. Photos now go through it.');
-  };
-
-  const pickMode = (m: 'key' | 'proxy') => {
+  const pickMode = (m: 'key' | 'server') => {
     setMode(m);
     setMessage('');
-    if (m === 'key') updateProfile({ aiProxyUrl: null });
+    updateProfile({ aiUseOwnKey: m === 'key' });
   };
 
   return (
@@ -91,12 +83,12 @@ export default function FoodSettings() {
         <Card style={{ gap: 14 }}>
           <Text style={{ color: c.muted, lineHeight: 20 }}>
             {planInUse
-              ? 'While you’re signed in with ChatGPT, photo estimates use your ChatGPT plan. The key or server below is used only after you sign out.'
-              : 'Snap a meal and OpenAI estimates its calories and macros. Pacebook never includes an API key in the app: use your own key, or the address of a calorie server you run (see server/openai-proxy in the project).'}
+              ? 'While you’re signed in with ChatGPT, photo estimates use your ChatGPT plan. The options below are used only after you sign out.'
+              : 'Snap a meal and OpenAI estimates its calories and macros. Use Pacebook AI with Sign in with Apple, or your own OpenAI key.'}
           </Text>
           <View style={styles.chips}>
+            <Chip label="Pacebook AI" selected={mode === 'server'} onPress={() => pickMode('server')} />
             <Chip label="My OpenAI key" selected={mode === 'key'} onPress={() => pickMode('key')} />
-            <Chip label="Calorie server" selected={mode === 'proxy'} onPress={() => pickMode('proxy')} />
           </View>
 
           {mode === 'key' ? (
@@ -132,20 +124,7 @@ export default function FoodSettings() {
               </Text>
             </View>
           ) : (
-            <View style={{ gap: 10 }}>
-              <TextInput
-                value={proxy}
-                onChangeText={setProxy}
-                placeholder="https://pacebook-ai.example.workers.dev/estimate"
-                placeholderTextColor={c.muted}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-                style={[styles.input, { color: c.text, borderColor: c.border, backgroundColor: c.bg }]}
-                accessibilityLabel="Calorie server address"
-              />
-              <Button title="Save server" onPress={saveProxy} disabled={!proxy.trim()} />
-            </View>
+            <ServerSettings />
           )}
           {message ? <Text style={{ color: c.text, fontWeight: '600' }}>{message}</Text> : null}
         </Card>
