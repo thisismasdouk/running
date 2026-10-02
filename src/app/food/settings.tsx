@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
+import { ChatgptSettings } from '@/components/ChatgptSettings';
 import { useColors } from '@/components/theme';
 import { Button, Card, Chip, SectionTitle } from '@/components/ui';
 import { confirm } from '@/lib/confirm';
@@ -21,6 +22,7 @@ export default function FoodSettings() {
   const [proxy, setProxy] = useState(profile.aiProxyUrl ?? '');
   const [model, setModel] = useState(profile.aiModel);
   const [message, setMessage] = useState('');
+  const [planInUse, setPlanInUse] = useState(false);
 
   useEffect(() => {
     getOpenAiKey().then(setSavedKey, () => setSavedKey(null));
@@ -85,10 +87,12 @@ export default function FoodSettings() {
         </Card>
 
         <SectionTitle>AI photo estimates</SectionTitle>
+        <ChatgptSettings onChange={setPlanInUse} />
         <Card style={{ gap: 14 }}>
           <Text style={{ color: c.muted, lineHeight: 20 }}>
-            Snap a meal and OpenAI estimates its calories and macros. Pacebook never includes an API key in the app: use your own key, or
-            the address of a calorie server you run (see server/openai-proxy in the project).
+            {planInUse
+              ? 'While you’re signed in with ChatGPT, photo estimates use your ChatGPT plan. The key or server below is used only after you sign out.'
+              : 'Snap a meal and OpenAI estimates its calories and macros. Pacebook never includes an API key in the app: use your own key, or the address of a calorie server you run (see server/openai-proxy in the project).'}
           </Text>
           <View style={styles.chips}>
             <Chip label="My OpenAI key" selected={mode === 'key'} onPress={() => pickMode('key')} />
@@ -147,7 +151,7 @@ export default function FoodSettings() {
         </Card>
 
         <Card style={{ gap: 10 }}>
-          <Text style={[styles.label, { color: c.text }]}>Model</Text>
+          <Text style={[styles.label, { color: c.text }]}>{planInUse ? 'Model with your key or server' : 'Model'}</Text>
           <View style={styles.chips}>
             {MODELS.map((m) => (
               <Chip

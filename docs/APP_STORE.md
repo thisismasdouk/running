@@ -19,6 +19,7 @@ This is the step-by-step checklist for shipping Pacebook with EAS. Everything th
 | Google Maps key for Android read from an environment variable | `app.config.js` |
 | HealthKit: capability and entitlement, purpose strings for reading heart rate and saving workouts, no background delivery. HealthKit isn't in Expo Go, so the app loads it only in development and App Store builds | `@kingstinct/react-native-healthkit` plugin in `app.json`, `src/lib/health.ios.ts` |
 | Camera and photo-library purpose strings (meal photos); microphone permission removed. The OpenAI key is never bundled: it's stored per device with `expo-secure-store`, or kept on a proxy (`server/openai-proxy`) | `expo-image-picker` and `expo-secure-store` plugins, `src/lib/food-ai.ts` |
+| "Continue with ChatGPT" (Sign in with ChatGPT, PKCE, no client secret): tokens in the Keychain, redirect `pacebook://auth/callback`. Hidden until a client ID is set | `extra.chatgpt` in `app.json`, `src/lib/chatgpt.ts`, `src/lib/chatgpt-auth.ts`, `expo-web-browser` plugin |
 | In-app privacy policy | `src/app/privacy.tsx` (and `docs/PRIVACY.md` to host) |
 
 ## 1. One-time setup
@@ -41,7 +42,8 @@ This is the step-by-step checklist for shipping Pacebook with EAS. Everything th
 
    Without the key, the map is blank in Android builds (Expo Go and iOS don't need it).
 5. **(you)** Host the privacy policy: publish `docs/PRIVACY.md` (with your support email filled in) at a public URL, e.g. GitHub Pages or a Notion page. Apple and Google both require the URL.
-6. **(you)** Reserve the app name in App Store Connect: **Apps → + → New App**, platform iOS, name "Pacebook" (names are unique, so have a fallback like "Pacebook: Run Tracker"), primary language, bundle ID from step 2, SKU `pacebook`. Note the numeric **Apple ID** of the app. To make `eas submit` fully non-interactive, add it to `eas.json` under `submit.production.ios.ascAppId`.
+6. **(you)** Sign in with ChatGPT (optional): apply at <https://openai.com/form/sign-in-with-chatgpt-interest/> for "Sign in and ChatGPT plan use for AI requests", asking OpenAI to register the redirect `pacebook://auth/callback`. It is a limited trial for selected commercial partners, so approval isn't guaranteed. When OpenAI issues a client ID (typically starting `oaiapp_`), paste it into `expo.extra.chatgpt.clientId` in `app.json` and make a new build. A public client ID is not a secret, so it can be committed. Until then the app shows no ChatGPT button and works as before. Never use another app's client ID (for example the Codex app's); the app refuses the known ones. If OpenAI registers a different redirect (for example an https universal link), change `extra.chatgpt.redirectUri` to match it exactly. Before release, confirm with OpenAI: the approved "Continue with ChatGPT" button artwork (the app uses a plain text button), the link for *Manage usage* (`CHATGPT_USAGE_URL` in `src/lib/chatgpt.ts`), and whether a commercial client must send a host identifier (`ext_agent_host_id`), which the public docs describe only for open-source apps.
+7. **(you)** Reserve the app name in App Store Connect: **Apps → + → New App**, platform iOS, name "Pacebook" (names are unique, so have a fallback like "Pacebook: Run Tracker"), primary language, bundle ID from step 2, SKU `pacebook`. Note the numeric **Apple ID** of the app. To make `eas submit` fully non-interactive, add it to `eas.json` under `submit.production.ios.ascAppId`.
 
 ## 2. Test on real devices first
 
@@ -118,6 +120,8 @@ Because meal photos can be sent to OpenAI (a third party that may keep them up t
 - **Photos or Videos** → *App Functionality*, **not linked** to the user, **not used for tracking**.
 - **Other User Content** (the optional note typed with a photo) → same answers.
 
+Once "Continue with ChatGPT" is live, a photo sent on a ChatGPT plan travels with that person's sign-in token, so OpenAI can tie it to their account. Change both types to **linked** to the user in the label and set `NSPrivacyCollectedDataTypeLinked` to `true` for them in `app.json` in the same release that adds the client ID. The email address and account identifier that OpenAI returns at sign-in stay in the Keychain and are never sent to you, so they aren't "collected" by the app.
+
 Everything else stays on the device and isn't "collected":
 
 - Location and run data are processed and stored only on the device (on-device processing is not "collection" under Apple's definition).
@@ -154,6 +158,8 @@ Paste something like:
 >
 > Food tab: meals can be logged by hand, or estimated from a photo with OpenAI. Before the first photo is sent, the app explains that the photo goes to OpenAI and asks for consent (guideline 5.1.2(i)); consent can be withdrawn in Food → Settings. No API key ships in the app: the user adds their own OpenAI key (stored in the Keychain) or the app uses our calorie server. [For review, either configure the calorie server URL in this build, or provide a test key here.] Sample meals load with "Load sample runs".
 >
+> Continue with ChatGPT (Food → Settings): optional. It connects the user's own ChatGPT account through OpenAI's sign-in page (ASWebAuthenticationSession, OAuth with PKCE) so meal-photo estimates use their ChatGPT plan instead of an API key. Pacebook has no account of its own and this is not a login to Pacebook: every feature works without it, so no account creation or deletion applies, and it is a sign-in to a specific third-party service rather than a general login option (guideline 4.8). Signing out in the same screen revokes the session with OpenAI and deletes the tokens from the Keychain. Pacebook does not sell or charge for this; usage is covered by the user's existing ChatGPT plan. [Provide a ChatGPT test account here, or note that photo estimates can be reviewed with the calorie server instead.]
+>
 > Apart from meal photos the user chooses to estimate, all data is stored on the device only.
 
 Attaching a short screen recording of a run with the phone locked helps with the background-location question.
@@ -181,6 +187,7 @@ Attaching a short screen recording of a run with the phone locked helps with the
 - [ ] Create the Google Maps Android API key and store it as `GOOGLE_MAPS_ANDROID_API_KEY` in EAS
 - [ ] Publish the privacy policy (fill in your support email) and enter its URL
 - [ ] Add `ascAppId` to `eas.json` (optional, for non-interactive submits)
+- [ ] Apply for Sign in with ChatGPT access and, once approved, paste the client ID into `app.json` (step 1.6) and update the App Privacy label to "linked"
 - [ ] Take screenshots, fill in the listing, age rating and App Privacy answers
 - [ ] Do the first manual Play upload and create a Google service account key for `eas submit`
 - [ ] Be aware that the name "Pacebook" plays on "Facebook". Meta has objected to other "-book" names before, so there is some risk of a rename request after launch

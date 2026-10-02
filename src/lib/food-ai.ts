@@ -2,17 +2,22 @@ import type { FoodItem, Totals } from './food';
 import { sumTotals } from './food';
 
 /**
- * Calorie estimates from a meal photo, using OpenAI's Chat Completions API
- * with a vision model and a strict JSON schema.
+ * Calorie estimates from a meal photo, using an OpenAI vision model and a
+ * strict JSON schema.
  *
- * The app never ships an API key. Requests go either straight to OpenAI with
- * a key the user entered on their own device (kept in the iOS Keychain /
- * Android Keystore), or to a proxy server that adds the key (see
- * server/openai-proxy). Only the photo and an optional note are sent.
+ * The app never ships an API key. Requests go one of three ways:
+ *  - with "Sign in with ChatGPT", to the Responses API with the person's
+ *    OAuth access token, so usage counts against their ChatGPT plan;
+ *  - straight to Chat Completions with a key the user entered on their own
+ *    device (kept in the iOS Keychain / Android Keystore);
+ *  - to a proxy server that adds the key (see server/openai-proxy).
+ * Only the photo and an optional note are sent.
  */
 
 export const DEFAULT_AI_MODEL = 'gpt-4o-mini';
 export const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
+/** The only endpoint ChatGPT plan requests may use. */
+export const RESPONSES_URL = 'https://api.openai.com/v1/responses';
 
 export type FoodAnalysis = Totals & {
   name: string;
@@ -21,7 +26,13 @@ export type FoodAnalysis = Totals & {
   notes: string;
 };
 
-export type AiConfig = { apiKey: string | null; proxyUrl: string | null; model: string };
+export type AiConfig = {
+  apiKey: string | null;
+  proxyUrl: string | null;
+  model: string;
+  /** Set when signed in with ChatGPT with plan use allowed; the request then uses the plan and nothing else. */
+  chatgpt?: { accessToken: string; model: string } | null;
+};
 
 const ITEM_SCHEMA = {
   type: 'object',
@@ -82,7 +93,39 @@ export function buildFoodRequest(imageDataUrl: string, model: string, note?: str
   };
 }
 
-export class FoodAiError extends Error {}
+/**
+ * The Responses API request for one photo on the person's ChatGPT plan. Plan
+ * requests must set `store: false` and `stream: true`, carry the prompt as
+ * `instructions`, and leave out `temperature` and output-token limits.
+ */
+export function buildPlanFoodRequest(imageDataUrl: string, model: string, note?: string) {
+  const text = note?.trim() ? `Estimate this meal. The person adds: "${note.trim()}"` : 'Estimate this meal.';
+  return {
+    model,
+    instructions: SYSTEM_PROMPT,
+    input: [
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text },
+          { type: 'input_image', image_url: imageDataUrl, detail: 'auto' },
+        ],
+      },
+    ],
+    text: { format: { type: 'json_schema', ...FOOD_SCHEMA } },
+    store: false,
+    stream: true,
+  };
+}
+
+export class FoodAiError extends Error {
+  /** What the error card should offer: ChatGPT usage settings, or signing in again. */
+  action?: 'manage-usage' | 'sign-in';
+  constructor(message: string, action?: 'manage-usage' | 'sign-in') {
+    super(message);
+    this.action = action;
+  }
+}
 
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.round(v) : 0);
 
@@ -91,9 +134,14 @@ export function parseFoodResponse(body: unknown): FoodAnalysis {
   const choice = (body as { choices?: { message?: { content?: string | null; refusal?: string | null } }[] })?.choices?.[0];
   const message = choice?.message;
   if (message?.refusal) throw new FoodAiError(`The AI declined: ${message.refusal}`);
+  return parseFoodJson(message?.content ?? '');
+}
+
+/** Reads the model's JSON answer into an analysis. */
+function parseFoodJson(content: string): FoodAnalysis {
   let data: Record<string, unknown>;
   try {
-    data = JSON.parse(message?.content ?? '');
+    data = JSON.parse(content);
   } catch {
     throw new FoodAiError('The AI returned an unexpected answer. Try again, or add the meal by hand.');
   }
@@ -128,8 +176,107 @@ export function describeHttpError(status: number, body: unknown, viaProxy: boole
   return apiMessage?.message ?? `Request failed (${status}).`;
 }
 
+type StreamEvent = {
+  type?: string;
+  delta?: string;
+  code?: string;
+  message?: string;
+  response?: {
+    error?: { code?: string; message?: string } | null;
+    output?: { type?: string; content?: { type?: string; text?: string; refusal?: string }[] }[];
+  };
+};
+
+/**
+ * Reads a streamed Responses API body (server-sent events) into an analysis.
+ * Only `response.completed` counts as success: a usage limit can still fail a
+ * response after text has started to arrive.
+ */
+export function parsePlanFoodStream(sse: string): FoodAnalysis {
+  let text = '';
+  let completed: StreamEvent['response'] | null = null;
+  for (const line of sse.split(/\r?\n/)) {
+    if (!line.startsWith('data:')) continue;
+    let event: StreamEvent;
+    try {
+      event = JSON.parse(line.slice(5));
+    } catch {
+      continue;
+    }
+    if (event.type === 'response.output_text.delta') text += event.delta ?? '';
+    else if (event.type === 'response.completed') completed = event.response ?? {};
+    else if (event.type === 'response.failed') throw planError(event.response?.error?.code ?? null, 0, event.response?.error?.message);
+    else if (event.type === 'error') throw planError(event.code ?? null, 0, event.message);
+    else if (event.type === 'response.incomplete') throw new FoodAiError('The AI stopped before finishing. Try again.');
+  }
+  if (!completed) throw new FoodAiError('The connection dropped before the estimate finished. Try again.');
+  const parts = (completed.output ?? []).flatMap((item) => (item.type === 'message' ? (item.content ?? []) : []));
+  const refusal = parts.find((p) => p.type === 'refusal')?.refusal;
+  if (refusal) throw new FoodAiError(`The AI declined: ${refusal}`);
+  const final = parts
+    .filter((p) => p.type === 'output_text')
+    .map((p) => p.text ?? '')
+    .join('');
+  return parseFoodJson(final || text);
+}
+
+/** A user-facing error for a failed ChatGPT plan request. Plan errors stop the estimate; no other billing path is tried. */
+export function planError(code: string | null, status: number, detail?: string): FoodAiError {
+  switch (code) {
+    case 'subscription_sharing_usage_limit_exceeded':
+      return new FoodAiError('Usage limit reached. Review your plan or this app’s limit in ChatGPT settings.', 'manage-usage');
+    case 'subscription_sharing_user_not_eligible':
+      return new FoodAiError('Your ChatGPT account can’t use its plan in Pacebook. Sign out in Food → AI settings to use an OpenAI key instead.');
+    case 'subscription_sharing_usage_unavailable':
+    case 'subscription_sharing_user_unavailable':
+      return new FoodAiError('ChatGPT couldn’t check your plan just now. Try again in a minute.');
+    case 'subscription_sharing_unsupported_capability':
+      return new FoodAiError('That model can’t estimate photos on your ChatGPT plan. Pick another model in Food → AI settings.');
+    case 'subscription_sharing_invalid_user':
+      return new FoodAiError('ChatGPT didn’t accept your sign-in. Sign in again in Food → AI settings.', 'sign-in');
+    case 'chatpass_v2_scope_not_authorized':
+    case 'chatpass_v2_invalid_authorization_context':
+    case 'subscription_sharing_route_not_supported':
+      return new FoodAiError('ChatGPT plan use isn’t set up correctly for this app.');
+  }
+  if (status === 401) return new FoodAiError('ChatGPT didn’t accept your sign-in. Check the account in Food → AI settings.', 'sign-in');
+  if (status === 403) return new FoodAiError('ChatGPT plan use isn’t allowed for this account or region.');
+  if (status === 429) return new FoodAiError('Usage limit reached. Review your plan or this app’s limit in ChatGPT settings.', 'manage-usage');
+  if (status >= 500) return new FoodAiError('ChatGPT plan use is unavailable right now. Try again in a minute.');
+  return new FoodAiError(detail || (status ? `Request failed (${status}).` : 'The AI couldn’t finish the estimate. Try again.'));
+}
+
+async function analyseOnPlan(imageDataUrl: string, chatgpt: { accessToken: string; model: string }, note?: string, signal?: AbortSignal): Promise<FoodAnalysis> {
+  let res: Response;
+  try {
+    res = await fetch(RESPONSES_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${chatgpt.accessToken}` },
+      body: JSON.stringify(buildPlanFoodRequest(imageDataUrl, chatgpt.model, note)),
+      signal,
+    });
+  } catch (e) {
+    if ((e as Error)?.name === 'AbortError') throw e;
+    throw new FoodAiError('Couldn’t reach the AI service. Check your internet connection.');
+  }
+  // The body is read once the stream has ended, then checked for `response.completed`.
+  const raw = await res.text().catch(() => '');
+  if (!res.ok) {
+    // Before a stream opens, the error isn't always the standard API error object.
+    let body: { error?: { code?: string; message?: string }; detail?: unknown } | null = null;
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      body = null;
+    }
+    throw planError(body?.error?.code ?? null, res.status, body?.error?.message ?? (typeof body?.detail === 'string' ? body.detail : undefined));
+  }
+  return parsePlanFoodStream(raw);
+}
+
 /** Sends one photo for analysis. `base64Jpeg` is the image data without a data-URL prefix. */
 export async function analyseFoodPhoto(base64Jpeg: string, config: AiConfig, note?: string, signal?: AbortSignal): Promise<FoodAnalysis> {
+  if (config.chatgpt) return analyseOnPlan(`data:image/jpeg;base64,${base64Jpeg}`, config.chatgpt, note, signal);
   const viaProxy = !!config.proxyUrl;
   if (!viaProxy && !config.apiKey) throw new FoodAiError('Add your OpenAI API key in Food → AI settings first.');
   const body = buildFoodRequest(`data:image/jpeg;base64,${base64Jpeg}`, config.model || DEFAULT_AI_MODEL, note);
