@@ -23,6 +23,8 @@ A running tracker for iOS and Android, built with Expo (SDK 57) and Expo Router.
 - **Shoes**: add your shoes in the You tab, pick a default, and choose the pair for each run. Each shoe shows its total distance and warns past 600 km (375 mi). Retire or delete old pairs.
 - **Share a run**: the share icon on a run opens a 4:5 image card (route, distance, pace, time, elevation) in orange, dark or light, ready for Instagram, WhatsApp or Messages via the share sheet. On web the image downloads.
 - **GPX export and import**: export any run as a GPX file to upload to Strava (*Upload activity → File*), Garmin Connect or Komoot. Import GPX files from Strava, Garmin or a watch in the You tab; long gaps inside a track become pauses, and an already-imported run is flagged.
+- **Apple Health and heart rate** (iPhone, development or App Store build): turn on *Apple Health* in the You tab to save each run to Health as a running workout with its route, distance and calories, and to pull heart rate from your Apple Watch for the run. Run details then show average and max heart rate, a heart-rate chart and time in five zones based on your max heart rate. Heart rate that syncs late from the watch is picked up the next time you open the run. Not available in Expo Go, where the setting explains why.
+- **Calories burned**: set your weight in the You tab for an estimate on each run.
 - **Personal records**: the fastest 400m, 1K, mile, 5K, 10K, half and full marathon found anywhere inside your runs, not only whole-run times.
 - **Progress**: 12-week mileage chart, plus month, year and all-time totals.
 - **Settings**: km or miles, weekly goal, split alerts, voice cues, voice and speed, auto-pause, countdown, and sample runs to explore the app before your first run.

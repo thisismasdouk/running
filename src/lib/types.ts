@@ -1,3 +1,5 @@
+import type { HeartRateSummary } from './heartrate';
+
 export type Units = 'metric' | 'imperial';
 
 /** A single recorded GPS fix. */
@@ -77,6 +79,10 @@ export type Run = {
   workoutName?: string;
   /** The workout's steps in order; laps[i] is the result of workoutSteps[i]. */
   workoutSteps?: FlatStep[];
+  /** Heart rate read from Apple Health for the run's time window. */
+  heartRate?: HeartRateSummary;
+  /** When the run was written to Apple Health. */
+  healthSavedAt?: number;
 };
 
 export type StepKind = 'warmup' | 'run' | 'recover' | 'cooldown';
@@ -141,4 +147,10 @@ export type Profile = {
   speechRate: number;
   /** Shoe preselected for new runs. */
   defaultShoeId: string | null;
+  /** Save runs to Apple Health and read heart rate from it (iOS development/App Store builds). */
+  healthSync: boolean;
+  /** For heart-rate zones; DEFAULT_MAX_HR when not set. */
+  maxHr: number | null;
+  /** Body weight in kg, for calorie estimates. */
+  weightKg: number | null;
 };

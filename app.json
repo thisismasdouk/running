@@ -83,6 +83,14 @@
           "backgroundColor": "#FC4C02"
         }
       ],
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "Pacebook reads your heart rate during runs to show average and maximum heart rate and time in each heart-rate zone.",
+          "NSHealthUpdateUsageDescription": "Pacebook saves your runs to Apple Health as workouts with their route, distance and calories burned.",
+          "background": false
+        }
+      ],
       "./plugins/withoutBackgroundFetch"
     ],
     "scheme": "pacebook",

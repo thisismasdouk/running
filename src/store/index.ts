@@ -24,6 +24,9 @@ export const DEFAULT_PROFILE: Profile = {
   voiceId: null,
   speechRate: 1,
   defaultShoeId: null,
+  healthSync: false,
+  maxHr: null,
+  weightKg: null,
 };
 
 type Listener = () => void;
@@ -100,6 +103,12 @@ export function updateRun(id: string, patch: Partial<Pick<Run, 'title' | 'notes'
   saveRun({ ...run, ...patch });
   // Setting the type when saving can make the run match that day's plan session.
   if (patch.type) recordRunInPlan({ ...run, ...patch });
+}
+
+/** Fields filled in after saving, from Apple Health. */
+export function setRunHealth(id: string, patch: Partial<Pick<Run, 'heartRate' | 'healthSavedAt'>>) {
+  const run = runsStore.get().find((r) => r.id === id);
+  if (run) saveRun({ ...run, ...patch });
 }
 
 export function deleteRun(id: string) {

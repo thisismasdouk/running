@@ -16,6 +16,7 @@ import { buzz, say } from '@/lib/feedback';
 import { distanceUnit, formatDistanceValue, formatDuration, formatPaceValue, paceUnit } from '@/lib/format';
 import { FIRST_FIX_ACCURACY_M, MAX_ACCURACY_M } from '@/lib/geo';
 import { gps, gpsSignal, useGps } from '@/lib/gps';
+import { syncRunToHealth } from '@/lib/healthSync';
 import { goBack } from '@/lib/nav';
 import { resolveWorkout } from '@/lib/plans';
 import { currentLap, currentPace, currentSplit, movingMs, recorder, useRecorder, type RecorderWorkout } from '@/lib/recorder';
@@ -287,6 +288,7 @@ export default function Record() {
     const shoe = shoes.find((x) => x.id === profile.defaultShoeId && !x.retired);
     const saved = shoe ? { ...run, shoeId: shoe.id } : run;
     saveRun(saved);
+    void syncRunToHealth(saved.id);
     // Tick off the plan session it was started from, or one it matches that day.
     recordRunInPlan(saved, result.workout?.sessionKey);
     router.replace({ pathname: '/edit/[id]', params: { id: run.id, fresh: '1' } });

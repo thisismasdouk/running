@@ -1,4 +1,5 @@
 import { progressSeries } from './geo';
+import { DEFAULT_MAX_HR, summariseHeartRate, type HrSample } from './heartrate';
 import { lapsFromMarks } from './laps';
 import { buildRun } from './runs';
 import type { Lap, Run, RunType, Segment, Shoe } from './types';
@@ -62,6 +63,22 @@ function lapsEvery(run: Run, everyM: number): Lap[] {
   return lapsFromMarks(marks, { distanceM: end.d, movingMs: end.t });
 }
 
+/** Watch-style readings every 5 s: a warm-up climb, then drift with effort. */
+function sampleHeartRate(run: Run, seed: number, base: number) {
+  const rand = rng(seed * 7);
+  const end = run.startedAt + run.movingMs;
+  const samples: HrSample[] = [];
+  for (let t = run.startedAt; t <= end; t += 5000) {
+    const warm = Math.min(1, (t - run.startedAt) / 480_000);
+    const drift = ((t - run.startedAt) / 3_600_000) * 8;
+    samples.push({ t, bpm: 95 + (base - 95) * warm + drift + 6 * Math.sin((t - run.startedAt) / 140_000) + (rand() - 0.5) * 4 });
+  }
+  return summariseHeartRate(samples, run.startedAt, end, DEFAULT_MAX_HR) ?? undefined;
+}
+
+/** Average heart rate each run type settles at, for the sample data. */
+const SAMPLE_HR = { easy: 142, long: 148, tempo: 164, intervals: 158, race: 172, recovery: 132 } as const;
+
 const SAMPLE_TYPES: RunType[] = ['easy', 'tempo', 'intervals', 'long', 'easy', 'recovery', 'long', 'easy', 'long', 'intervals', 'tempo', 'easy', 'race'];
 
 /** A few weeks of plausible training so the app can be explored without running first. */
@@ -95,6 +112,8 @@ export function sampleRuns(now = Date.now()): Run[] {
       type,
       // Older runs predate the shoe, like a real log would.
       ...(i < 10 ? { shoeId: SAMPLE_SHOE.id } : {}),
+      // As if a watch was worn for the more recent runs.
+      ...(i < 8 ? { heartRate: sampleHeartRate(run, i + 1, SAMPLE_HR[type]) } : {}),
       ...(type === 'intervals' ? { laps: lapsEvery(run, 800) } : type === 'tempo' ? { laps: lapsEvery(run, 2000) } : {}),
     };
   });

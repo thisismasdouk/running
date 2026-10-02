@@ -17,6 +17,7 @@ This is the step-by-step checklist for shipping Pacebook with EAS. Everything th
 | Android: no `ACCESS_BACKGROUND_LOCATION` (a foreground service with a notification is used instead), and unused template permissions are blocked | `android.blockedPermissions`, `expo-location` plugin |
 | App icon, Android adaptive icon (foreground, background, monochrome), splash, favicon | `assets/`, regenerate with `npm run icons` |
 | Google Maps key for Android read from an environment variable | `app.config.js` |
+| HealthKit: capability and entitlement, purpose strings for reading heart rate and saving workouts, no background delivery. HealthKit isn't in Expo Go, so the app loads it only in development and App Store builds | `@kingstinct/react-native-healthkit` plugin in `app.json`, `src/lib/health.ios.ts` |
 | In-app privacy policy | `src/app/privacy.tsx` (and `docs/PRIVACY.md` to host) |
 
 ## 1. One-time setup
@@ -115,6 +116,7 @@ Choose **"No, we do not collect data from this app."** This is accurate because:
 
 - Location and run data are processed and stored only on the device (on-device processing is not "collection" under Apple's definition).
 - There is no account, analytics, crash reporting SDK, advertising or server.
+- Apple Health data (heart rate read, workouts written) stays on the device too.
 
 The privacy manifest already declares no tracking and no collected data types. If you add analytics or crash reporting later, update both the label and `ios.privacyManifests`.
 
@@ -141,6 +143,8 @@ Paste something like:
 > Background audio: used only to speak split times ("3 kilometres, time 17 minutes…") during a run while the phone is locked. It can be turned off under You → Voice cues.
 >
 > To see populated screens without running, open the **You** tab and tap **Load sample runs**. To test recording in the Simulator, use Features → Location → City Run and press Start on the Record tab.
+>
+> HealthKit: optional, off by default (You → Apple Health). When on, each run is saved to Health as a running workout with its route, and heart rate for the run's time window is read to show average/max heart rate and zones on the run screen. Health data is stored only on the device and never used for advertising.
 >
 > All data is stored on the device only; nothing is sent to any server.
 

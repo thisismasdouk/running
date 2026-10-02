@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { HeartRateCard } from '@/components/HeartRate';
 import { ElevationChart, LapsTable, PaceChart, SplitsTable } from '@/components/charts';
 import { RouteMap } from '@/components/RouteMap';
 import { RunTypeBadge } from '@/components/RunTypeBadge';
@@ -12,6 +13,8 @@ import { WorkoutResults } from '@/components/WorkoutSteps';
 import { confirm } from '@/lib/confirm';
 import { distanceUnit, formatDateTime, formatDistanceValue, formatDuration, formatElevation, formatPace, formatPaceValue, paceUnit } from '@/lib/format';
 import { progressSeries } from '@/lib/geo';
+import { fetchRunHeartRate } from '@/lib/healthSync';
+import { runCalories } from '@/lib/heartrate';
 import { goBack } from '@/lib/nav';
 import { paceSeries } from '@/lib/pace';
 import { runTypeOf } from '@/lib/runs';
@@ -23,13 +26,18 @@ export default function RunDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const run = useRun(id);
   const runs = useRuns();
-  const { units } = useProfile();
+  const { units, weightKg } = useProfile();
 
   const splits = useMemo(() => (run ? computeSplits(run.segments, units) : []), [run, units]);
   const samples = useMemo(() => (run ? progressSeries(run.segments) : []), [run]);
   const pace = useMemo(() => paceSeries(samples), [samples]);
   const shoes = useShoes();
   const prs = useMemo(() => (run ? new Set(prsSetBy(run, runs)) : new Set<string>()), [run, runs]);
+
+  // Heart rate from a watch can reach Apple Health after the run was saved.
+  useEffect(() => {
+    if (run) void fetchRunHeartRate(run);
+  }, [run]);
 
   if (!run) {
     return <Empty title="Run not found" body="It may have been deleted." />;
@@ -45,6 +53,7 @@ export default function RunDetail() {
   const hasRoute = run.segments.some((s) => s.length > 1);
   const shoe = run.shoeId ? shoes.find((s) => s.id === run.shoeId) : undefined;
   const avgPace = paceSecPerKm(run.distanceM, run.movingMs);
+  const kcal = runCalories(weightKg, run.distanceM);
 
   return (
     <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ paddingBottom: 48 }}>
@@ -87,6 +96,22 @@ export default function RunDetail() {
               <Text style={{ color: c.muted }}>{shoe.name}</Text>
             </View>
           )}
+          {(kcal != null || run.healthSavedAt) && (
+            <View style={styles.meta}>
+              {kcal != null && (
+                <>
+                  <Ionicons name="flame-outline" size={14} color={c.muted} />
+                  <Text style={{ color: c.muted }}>About {kcal} kcal</Text>
+                </>
+              )}
+              {run.healthSavedAt && (
+                <>
+                  <Ionicons name="heart" size={14} color="#EF4444" />
+                  <Text style={{ color: c.muted }}>Saved to Apple Health</Text>
+                </>
+              )}
+            </View>
+          )}
           {run.simulated && <Text style={{ color: c.muted, fontWeight: '700' }}>Recorded with simulated GPS (demo)</Text>}
           {run.notes ? <Text style={[styles.notes, { color: c.text }]}>{run.notes}</Text> : null}
         </View>
@@ -126,6 +151,15 @@ export default function RunDetail() {
             <SectionTitle>Pace</SectionTitle>
             <Card>
               <PaceChart series={pace} avgPace={avgPace} units={units} />
+            </Card>
+          </>
+        )}
+
+        {run.heartRate && (
+          <>
+            <SectionTitle>Heart rate</SectionTitle>
+            <Card>
+              <HeartRateCard hr={run.heartRate} />
             </Card>
           </>
         )}

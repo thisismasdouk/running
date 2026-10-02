@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
+import { HealthSettings } from '@/components/HealthSettings';
 import { ShoeList } from '@/components/ShoeList';
 import { useColors } from '@/components/theme';
 import { Button, Card, SectionTitle, Stat } from '@/components/ui';
@@ -140,6 +141,9 @@ export default function Profile() {
 
       <SectionTitle>Voice</SectionTitle>
       <VoiceSettings profile={profile} />
+
+      <SectionTitle>Health & body</SectionTitle>
+      <HealthSettings profile={profile} />
 
       <SectionTitle>Shoes</SectionTitle>
       <ShoeList runs={runs} units={units} defaultShoeId={profile.defaultShoeId} />
