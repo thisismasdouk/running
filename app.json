@@ -1,14 +1,14 @@
 {
   "expo": {
-    "name": "Stride",
-    "slug": "stride",
+    "name": "Pacebook",
+    "slug": "pacebook",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.stride.running",
+      "bundleIdentifier": "com.thisismasdouk.pacebook",
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -47,7 +47,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.stride.running",
+      "package": "com.thisismasdouk.pacebook",
       "blockedPermissions": [
         "android.permission.ACCESS_BACKGROUND_LOCATION",
         "android.permission.SYSTEM_ALERT_WINDOW",
@@ -64,9 +64,9 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Stride uses your location while you record a run to map your route and measure distance, pace and elevation.",
-          "locationAlwaysAndWhenInUsePermission": "Allow Stride to keep tracking your run when your phone is locked or another app is open.",
-          "locationAlwaysPermission": "Allow Stride to keep tracking your run when your phone is locked or another app is open.",
+          "locationWhenInUsePermission": "Pacebook uses your location while you record a run to map your route and measure distance, pace and elevation.",
+          "locationAlwaysAndWhenInUsePermission": "Allow Pacebook to keep tracking your run when your phone is locked or another app is open.",
+          "locationAlwaysPermission": "Allow Pacebook to keep tracking your run when your phone is locked or another app is open.",
           "motionUsagePermission": false,
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": false,
@@ -85,7 +85,7 @@
       ],
       "./plugins/withoutBackgroundFetch"
     ],
-    "scheme": "stride",
+    "scheme": "pacebook",
     "experiments": {
       "typedRoutes": true
     }
