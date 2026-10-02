@@ -39,3 +39,18 @@ Docs: https://docs.expo.dev/eas/index.md
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
 - Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+
+## Giving the owner update commands
+
+The owner runs the app from a Windows clone (PowerShell, `C:\Users\madel\running`) where `npm install` rewrites `package-lock.json`, so a plain `git pull` fails with "Your local changes to the following files would be overwritten by merge: package-lock.json". Whenever you give update commands, always discard that file first:
+
+```powershell
+cd C:\Users\madel\running
+git restore package-lock.json
+git checkout main
+git pull
+npm install
+npm start
+```
+
+Or the one-liner `npm run update` (same steps), followed by `npm start`.

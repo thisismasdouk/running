@@ -163,4 +163,10 @@ export type Profile = {
   aiProxyUrl: string | null;
   /** When the user agreed to send meal photos to OpenAI. */
   aiConsentAt: number | null;
+  /** Model used for meal photos on the ChatGPT plan; null picks the account's first listed model. */
+  chatgptModel: string | null;
+  /** Use the OpenAI key saved on this phone instead of the Pacebook AI server. */
+  aiUseOwnKey: boolean;
+  /** The one-time "You're using your ChatGPT plan" notice has been dismissed. */
+  chatgptWelcomeSeen: boolean;
 };

@@ -26,14 +26,15 @@ A running tracker for iOS and Android, built with Expo (SDK 57) and Expo Router.
 - **Apple Health and heart rate** (iPhone, development or App Store build): turn on *Apple Health* in the You tab to save each run to Health as a running workout with its route, distance and calories, and to pull heart rate from your Apple Watch for the run. Run details then show average and max heart rate, a heart-rate chart and time in five zones based on your max heart rate. Heart rate that syncs late from the watch is picked up the next time you open the run. Not available in Expo Go, where the setting explains why.
 - **Calories burned**: set your weight in the You tab for an estimate on each run.
 - **Calorie tracker** (Food tab): a daily food log by meal (breakfast, lunch, dinner, snacks) with calories, protein, carbs and fat; a ring showing what's left of your daily goal, with calories burned on that day's runs added if you like; a 7-day chart; and any day's log by swiping back through dates.
-- **AI meal photos**: *Snap a meal* (or pick a photo) and OpenAI estimates each item on the plate with its portion, calories and macros. Adjust the portion (½× to 2×), add a note ("cooked in butter") and re-estimate, or edit the numbers before saving. The app never contains an API key: add your own key in Food → ⚙︎ (kept in the Keychain/Keystore), or point the app at the small proxy in `server/openai-proxy`. The first photo asks for consent before anything is sent.
+- **AI meal photos**: *Snap a meal* (or pick a photo) and OpenAI estimates each item on the plate with its portion, calories and macros. Adjust the portion (½× to 2×), add a note ("cooked in butter") and re-estimate, or edit the numbers before saving. The app never contains an API key. On iPhone, people sign in with Apple to use **Pacebook AI** (`server/calorie-server`, a small server you host, for example on Hetzner, that holds the OpenAI key and gives each person a daily allowance), or add their own OpenAI key in Food → ⚙︎ (kept in the Keychain/Keystore). The first photo asks for consent before anything is sent.
+- **Continue with ChatGPT** (iPhone and Android builds, once OpenAI has issued a client ID): sign in with a ChatGPT account in Food → ⚙︎ and photo estimates use that ChatGPT plan instead of an API key. It uses OpenAI's "Sign in with ChatGPT" (OAuth with PKCE through `expo-auth-session`); tokens stay in the Keychain/Keystore, are refreshed automatically and are revoked on sign-out. The button is hidden until `expo.extra.chatgpt.clientId` is set in `app.json` (see [docs/APP_STORE.md](docs/APP_STORE.md), step 1.6).
 - **Personal records**: the fastest 400m, 1K, mile, 5K, 10K, half and full marathon found anywhere inside your runs, not only whole-run times.
 - **Progress**: 12-week mileage chart, plus month, year and all-time totals.
 - **Settings**: km or miles, weekly goal, split alerts, voice cues, voice and speed, auto-pause, countdown, and sample runs to explore the app before your first run.
 - **Web demo mode**: in a browser that can't provide a real location (sandboxed previews, desktop without location), the Record screen offers **Simulate a run**. It feeds realistic moving GPS points through the same recorder, so the whole record → pause → resume → finish → save flow can be tried. Simulated runs are labelled as such. This option never appears on iOS or Android.
 - Light and dark mode.
 
-All data stays on the device (SQLite key-value store, or `localStorage` on web). There is no account or server. See [docs/PRIVACY.md](docs/PRIVACY.md).
+All data stays on the device (SQLite key-value store, or `localStorage` on web). There is no Pacebook account or server. See [docs/PRIVACY.md](docs/PRIVACY.md).
 
 ## Run it
 
@@ -41,6 +42,8 @@ All data stays on the device (SQLite key-value store, or `localStorage` on web).
 npm install
 npm start             # Expo Go (expo start --go)
 ```
+
+To get the latest version later, run `npm run update`. It throws away the local `package-lock.json` changes that `npm install` makes (otherwise `git pull` refuses with "Your local changes … would be overwritten"), switches to `main`, pulls and reinstalls.
 
 Scan the QR code with **Expo Go** to try it right away. Expo Go can't keep tracking in the background, so keep the app open while you run. For real runs with the phone in your pocket, make a development build:
 

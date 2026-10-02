@@ -1,5 +1,5 @@
 import { dailyCalories, dayKey, entriesOn, mealForTime, normaliseFood, scaleTotals, shiftDay, sumTotals, type FoodEntry } from '../food';
-import { analyseFoodPhoto, buildFoodRequest, describeHttpError, FoodAiError, parseFoodResponse } from '../food-ai';
+import { analyseFoodPhoto, buildFoodRequest, buildPlanFoodRequest, describeHttpError, FoodAiError, parseFoodResponse, parsePlanFoodStream, planError } from '../food-ai';
 
 const entry = (day: string, kcal: number, at = 0): FoodEntry => ({
   id: `${day}-${kcal}`,
@@ -103,11 +103,69 @@ describe('food AI', () => {
       return { ok: true, json: async () => completion({ is_food: true, name: 'Apple', items: [{ name: 'Apple', portion: '1', kcal: 95, protein_g: 0, carbs_g: 25, fat_g: 0 }], confidence: 'high', notes: '' }) };
     }) as unknown as typeof fetch;
     await analyseFoodPhoto('AAA', { apiKey: 'sk-test', proxyUrl: null, model: 'm' });
-    await analyseFoodPhoto('AAA', { apiKey: 'sk-test', proxyUrl: 'https://proxy.example/estimate', model: 'm' });
+    await analyseFoodPhoto('AAA', { apiKey: 'sk-test', proxyUrl: 'https://ai.example.com/', serverToken: 'session-1', model: 'm' });
     expect(calls[0].url).toBe('https://api.openai.com/v1/chat/completions');
     expect(calls[0].headers.Authorization).toBe('Bearer sk-test');
-    expect(calls[1].url).toBe('https://proxy.example/estimate');
-    expect(calls[1].headers.Authorization).toBeUndefined();
+    // The calorie server gets its own session token, never the OpenAI key.
+    expect(calls[1].url).toBe('https://ai.example.com/v1/estimate');
+    expect(calls[1].headers.Authorization).toBe('Bearer session-1');
     await expect(analyseFoodPhoto('AAA', { apiKey: null, proxyUrl: null, model: 'm' })).rejects.toThrow(/API key/);
+  });
+});
+
+describe('food AI on a ChatGPT plan', () => {
+  const apple = { is_food: true, name: 'Apple', items: [{ name: 'Apple', portion: '1', kcal: 95, protein_g: 0, carbs_g: 25, fat_g: 0 }], confidence: 'high', notes: '' };
+  const sse = (...events: object[]) => events.map((e) => `event: ${(e as { type: string }).type}\ndata: ${JSON.stringify(e)}\n\n`).join('');
+  const completed = (content: object) => ({
+    type: 'response.completed',
+    response: { output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(content) }] }] },
+  });
+
+  it('builds a Responses request the plan route accepts', () => {
+    const body = buildPlanFoodRequest('data:image/jpeg;base64,AAA', 'gpt-plan', 'half eaten') as Record<string, unknown>;
+    expect(body).toMatchObject({ model: 'gpt-plan', store: false, stream: true });
+    expect(body.instructions).toMatch(/nutritionist/);
+    expect(body.text).toMatchObject({ format: { type: 'json_schema', name: 'meal_estimate', strict: true } });
+    expect(body.input).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'Estimate this meal. The person adds: "half eaten"' },
+          { type: 'input_image', image_url: 'data:image/jpeg;base64,AAA', detail: 'auto' },
+        ],
+      },
+    ]);
+    for (const unsupported of ['temperature', 'max_output_tokens', 'max_tokens', 'previous_response_id', 'user', 'metadata']) expect(body).not.toHaveProperty(unsupported);
+  });
+
+  it('counts a stream as done only at response.completed', () => {
+    expect(parsePlanFoodStream(sse({ type: 'response.created' }, { type: 'response.output_text.delta', delta: '{"is' }, completed(apple))).kcal).toBe(95);
+    expect(() => parsePlanFoodStream(sse({ type: 'response.output_text.delta', delta: JSON.stringify(apple) }))).toThrow(/dropped/);
+    expect(() => parsePlanFoodStream(sse({ type: 'response.incomplete', response: {} }))).toThrow(FoodAiError);
+  });
+
+  it('points a usage limit at ChatGPT settings, even mid-stream', () => {
+    const failed = { type: 'response.failed', response: { error: { code: 'subscription_sharing_usage_limit_exceeded' } } };
+    expect(() => parsePlanFoodStream(sse({ type: 'response.output_text.delta', delta: '{' }, failed))).toThrow(/Usage limit/);
+    expect(planError('subscription_sharing_usage_limit_exceeded', 429).action).toBe('manage-usage');
+    expect(planError('subscription_sharing_invalid_user', 401).action).toBe('sign-in');
+    expect(planError(null, 503).message).toMatch(/unavailable/);
+    expect(planError(null, 403, 'Region not permitted').action).toBeUndefined();
+  });
+
+  it('sends only the sign-in token, to the Responses API, and never falls back to the key', async () => {
+    const calls: { url: string; headers: Record<string, string> }[] = [];
+    let status = 200;
+    globalThis.fetch = jest.fn(async (url: string, init: RequestInit) => {
+      calls.push({ url, headers: init.headers as Record<string, string> });
+      return { ok: status === 200, status, text: async () => (status === 200 ? sse(completed(apple)) : JSON.stringify({ detail: 'nope' })) };
+    }) as unknown as typeof fetch;
+    const config = { apiKey: 'sk-test', proxyUrl: 'https://proxy.example/estimate', model: 'm', chatgpt: { accessToken: 'oauth-token', model: 'gpt-plan' } };
+    expect((await analyseFoodPhoto('AAA', config)).name).toBe('Apple');
+    expect(calls[0].url).toBe('https://api.openai.com/v1/responses');
+    expect(calls[0].headers.Authorization).toBe('Bearer oauth-token');
+    status = 503;
+    await expect(analyseFoodPhoto('AAA', config)).rejects.toThrow(/unavailable/);
+    expect(calls).toHaveLength(2);
   });
 });
