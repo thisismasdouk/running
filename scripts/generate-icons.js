@@ -1,4 +1,4 @@
-// Renders the Stride icon set (assets/*.png) from the SVG below with a
+// Renders the Pacebook icon set (assets/*.png) from the SVG below with a
 // headless Chromium, then re-encodes with pngjs (opaque icons as RGB, since
 // App Store icons must not have an alpha channel).
 //
@@ -13,13 +13,13 @@ const { PNG } = require('pngjs');
 const OUT = path.join(__dirname, '..', 'assets');
 const ORANGE = '#FC4C02';
 
-// The mark: a bold, forward-leaning "S" with three motion streaks, in a 1024 box.
+// The mark: a bold, forward-leaning "P" with three motion streaks, in a 1024 box.
 function glyph(color, scale = 1) {
   const t = `translate(512 512) scale(${scale}) translate(-512 -512)`;
   return `
   <g transform="${t}" fill="none" stroke="${color}" stroke-linecap="round" stroke-linejoin="round">
     <g transform="translate(560 512) skewX(-14) translate(-560 -512)">
-      <path d="M 700 318 C 650 250 470 238 425 330 C 380 425 520 468 590 492 C 680 522 735 575 700 660 C 655 770 455 770 385 690" stroke-width="118"/>
+      <path d="M 455 760 L 455 290 L 585 290 C 760 290 760 540 585 540 L 455 540" stroke-width="118"/>
     </g>
     <path d="M 150 420 L 300 420" stroke-width="46" opacity="0.95"/>
     <path d="M 105 520 L 310 520" stroke-width="46" opacity="0.8"/>

@@ -10,7 +10,7 @@ import type { TrackPoint } from './types';
  * the browser Geolocation API; tracking.ts only talks to this interface.
  */
 
-export const LOCATION_TASK = 'stride-run-location';
+export const LOCATION_TASK = 'pacebook-run-location';
 const ASKED_ALWAYS_KEY = 'askedAlwaysLocation';
 
 export type Access =
@@ -95,7 +95,7 @@ export async function startBackgroundUpdates(): Promise<void> {
     pausesUpdatesAutomatically: false,
     showsBackgroundLocationIndicator: true,
     foregroundService: {
-      notificationTitle: 'Stride is recording your run',
+      notificationTitle: 'Pacebook is recording your run',
       notificationBody: 'Tap to return to your run.',
       notificationColor: '#FC4C02',
     },

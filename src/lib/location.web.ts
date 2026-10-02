@@ -10,7 +10,7 @@ export type { Access, AccessResult } from './location';
  * drops watch errors, so this talks to the browser directly.
  */
 
-export const LOCATION_TASK = 'stride-run-location';
+export const LOCATION_TASK = 'pacebook-run-location';
 export const supportsBackgroundUpdates = false;
 export const canOpenSettings = false;
 

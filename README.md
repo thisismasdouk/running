@@ -1,4 +1,4 @@
-# Stride 🏃
+# Pacebook 🏃
 
 A running tracker for iOS and Android, built with Expo (SDK 57) and Expo Router.
 
@@ -42,7 +42,7 @@ Android dev and release builds need a Google Maps API key for `react-native-maps
 
 ### Troubleshooting GPS
 
-- **"Precise location off"**: iOS *Settings → Stride → Location → Precise Location* or Android *App info → Permissions → Location → Use precise location*. Approximate fixes are hundreds of metres wide and can't measure a run.
+- **"Precise location off"**: iOS *Settings → Pacebook → Location → Precise Location* or Android *App info → Permissions → Location → Use precise location*. Approximate fixes are hundreds of metres wide and can't measure a run.
 - **"Location services off"**: turn on Location Services / Location for the whole device.
 - **"GPS unavailable here" on web**: the page is embedded without location access (e.g. an iframe preview). Open it in its own tab, allow location for the site, or use **Simulate a run**.
 - **"Weak GPS"**: go outside with a clear view of the sky and wait a few seconds before starting.

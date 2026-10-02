@@ -9,19 +9,19 @@ import { Card } from '@/components/ui';
  */
 const SECTIONS: [title: string, body: string][] = [
   [
-    'What Stride collects',
-    'While you record a run, Stride uses your device location (GPS) to draw your route and measure distance, pace and elevation. You can also add a name, run titles, notes and an effort rating.',
+    'What Pacebook collects',
+    'While you record a run, Pacebook uses your device location (GPS) to draw your route and measure distance, pace and elevation. You can also add a name, run titles, notes and an effort rating.',
   ],
   [
     'Where it is stored',
-    'Everything is stored only on this device. Stride has no account, no server, no analytics and no advertising. Nothing you record is sent to us or to anyone else.',
+    'Everything is stored only on this device. Pacebook has no account, no server, no analytics and no advertising. Nothing you record is sent to us or to anyone else.',
   ],
   [
     'Location in the background',
-    'Location is used only while a run is being recorded, including when the screen is locked so your run keeps recording. iPhone shows a blue location indicator and Android shows a notification the whole time. Stride stops using location when you finish or discard the run.',
+    'Location is used only while a run is being recorded, including when the screen is locked so your run keeps recording. iPhone shows a blue location indicator and Android shows a notification the whole time. Pacebook stops using location when you finish or discard the run.',
   ],
-  ['Deleting your data', 'Delete any run from its detail screen. Uninstalling Stride removes all of its data from the device.'],
-  ['Children', 'Stride does not knowingly collect any personal information from anyone, including children.'],
+  ['Deleting your data', 'Delete any run from its detail screen. Uninstalling Pacebook removes all of its data from the device.'],
+  ['Children', 'Pacebook does not knowingly collect any personal information from anyone, including children.'],
   ['Changes', 'If this policy changes, the new version will be shown here and on the App Store listing.'],
 ];
 

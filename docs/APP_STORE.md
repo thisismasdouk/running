@@ -1,12 +1,12 @@
-# Releasing Stride to the App Store (and Google Play)
+# Releasing Pacebook to the App Store (and Google Play)
 
-This is the step-by-step checklist for shipping Stride with EAS. Everything that can live in the repo is already configured: `app.json`, `app.config.js`, `eas.json`, the icon set, the splash screen, the iOS privacy manifest, permission strings and export-compliance flag. The steps marked **(you)** need your own accounts, so only you can do them.
+This is the step-by-step checklist for shipping Pacebook with EAS. Everything that can live in the repo is already configured: `app.json`, `app.config.js`, `eas.json`, the icon set, the splash screen, the iOS privacy manifest, permission strings and export-compliance flag. The steps marked **(you)** need your own accounts, so only you can do them.
 
 ## 0. What's already set up
 
 | Item | Where |
 | --- | --- |
-| Bundle ID / package `com.stride.running` | `app.json` → `ios.bundleIdentifier`, `android.package` |
+| Bundle ID / package `com.thisismasdouk.pacebook` | `app.json` → `ios.bundleIdentifier`, `android.package` |
 | Build numbers owned by EAS remote versioning and auto-incremented on production builds (set a starting value with `npx eas-cli@latest build:version:set`); `app.json` deliberately has no `buildNumber`/`versionCode` | `eas.json` (`appVersionSource: remote`, `autoIncrement`) |
 | Build profiles: `development`, `development-simulator`, `preview`, `production` | `eas.json` |
 | Submit profile `production` (Android goes to the internal track as a draft) | `eas.json` |
@@ -22,7 +22,7 @@ This is the step-by-step checklist for shipping Stride with EAS. Everything that
 ## 1. One-time setup
 
 1. **(you)** Join the [Apple Developer Program](https://developer.apple.com/programs/) ($99/year). For Android, create a [Google Play Console](https://play.google.com/console) account ($25 once).
-2. **(you)** Decide on the bundle identifier. `com.stride.running` implies you own `stride.running`. If you don't, change `ios.bundleIdentifier` and `android.package` in `app.json` to a reverse-DNS name you control (e.g. `com.yourname.stride`) **before the first build**. They can't be changed after the app is published.
+2. **(you)** Check the bundle identifier `com.thisismasdouk.pacebook` (based on the GitHub account, since there's no domain yet). If you'd rather use a domain you own, change `ios.bundleIdentifier` and `android.package` in `app.json` **before the first build**. They can't be changed after the app is published.
 3. Log in and link the project to EAS (this adds `owner` and `extra.eas.projectId` to `app.json`; commit that change):
 
    ```bash
@@ -39,7 +39,7 @@ This is the step-by-step checklist for shipping Stride with EAS. Everything that
 
    Without the key, the map is blank in Android builds (Expo Go and iOS don't need it).
 5. **(you)** Host the privacy policy: publish `docs/PRIVACY.md` (with your support email filled in) at a public URL, e.g. GitHub Pages or a Notion page. Apple and Google both require the URL.
-6. **(you)** Reserve the app name in App Store Connect: **Apps → + → New App**, platform iOS, name "Stride" (names are unique, so have a fallback like "Stride: Run Tracker"), primary language, bundle ID from step 2, SKU `stride`. Note the numeric **Apple ID** of the app. To make `eas submit` fully non-interactive, add it to `eas.json` under `submit.production.ios.ascAppId`.
+6. **(you)** Reserve the app name in App Store Connect: **Apps → + → New App**, platform iOS, name "Pacebook" (names are unique, so have a fallback like "Pacebook: Run Tracker"), primary language, bundle ID from step 2, SKU `pacebook`. Note the numeric **Apple ID** of the app. To make `eas submit` fully non-interactive, add it to `eas.json` under `submit.production.ios.ascAppId`.
 
 ## 2. Test on real devices first
 
@@ -55,8 +55,8 @@ Checklist:
 
 - [ ] First launch → Record: the location prompt appears (While Using). Start → "Change to Always Allow" is offered once. Choosing "Keep Only While Using" still records with the screen locked (blue indicator).
 - [ ] Lock the phone for 5+ minutes during a run: the route has no straight-line gap.
-- [ ] Android: a "Stride is recording your run" notification is shown during the run and goes away after Finish.
-- [ ] Turn Precise Location off for Stride: the Record screen says so and offers Open Settings.
+- [ ] Android: a "Pacebook is recording your run" notification is shown during the run and goes away after Finish.
+- [ ] Turn Precise Location off for Pacebook: the Record screen says so and offers Open Settings.
 - [ ] Voice cues at each km, auto-pause at a stop, 3-2-1 countdown.
 - [ ] Kill the app mid-run and reopen it: the Home banner shows the run, and recording continues.
 
@@ -84,13 +84,13 @@ The build appears in TestFlight after processing (about 10–30 minutes). Test i
 
 Suggested text. Avoid naming other apps or brands (e.g. "Strava") anywhere in the metadata.
 
-- **Name:** Stride
+- **Name:** Pacebook
 - **Subtitle (30 chars):** GPS run tracker, no account
 - **Category:** Health & Fitness (secondary: Sports)
 - **Promotional text:** Record your runs with GPS, hear your splits, and watch your weekly mileage grow. Everything stays on your phone.
 - **Description:**
 
-  > Stride is a simple, private running tracker.
+  > Pacebook is a simple, private running tracker.
   >
   > • Record runs with GPS: live time, distance, current and average pace on a map
   > • Keeps recording with your phone locked or in your pocket
@@ -134,7 +134,7 @@ Remove the sample runs afterwards if you like. They're clearly labelled as optio
 
 Paste something like:
 
-> Stride records runs using GPS. There is no login.
+> Pacebook records runs using GPS. There is no login.
 >
 > Background location: location is used only while the user is actively recording a run that they started with the Start button, so the run keeps recording when the phone is locked or in a pocket. The blue location indicator is shown the whole time, and tracking stops when the run is finished or discarded. The app works fully with "While Using the App" permission; "Always" is offered once, at the first Start, and is optional.
 >
@@ -171,4 +171,5 @@ Attaching a short screen recording of a run with the phone locked helps with the
 - [ ] Add `ascAppId` to `eas.json` (optional, for non-interactive submits)
 - [ ] Take screenshots, fill in the listing, age rating and App Privacy answers
 - [ ] Do the first manual Play upload and create a Google service account key for `eas submit`
+- [ ] Be aware that the name "Pacebook" plays on "Facebook". Meta has objected to other "-book" names before, so there is some risk of a rename request after launch
 - [ ] Review the brand: the accent colour `#FC4C02` is very close to Strava's trademark orange. Consider a distinct colour if you want to reduce trademark or copycat (Guideline 4.1) risk

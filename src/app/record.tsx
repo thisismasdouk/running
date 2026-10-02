@@ -202,7 +202,7 @@ export default function Record() {
       await stopTracking();
       await notice(
         "Couldn't start GPS",
-        `${errorText(e)}\n\n${IS_WEB ? 'Check that this site may use your location.' : 'Check that Location Services are on and Stride is allowed to use your location.'}`,
+        `${errorText(e)}\n\n${IS_WEB ? 'Check that this site may use your location.' : 'Check that Location Services are on and Pacebook is allowed to use your location.'}`,
       );
       return;
     } finally {
@@ -244,7 +244,7 @@ export default function Record() {
       const choice = await showDialog(
         noGps ? 'No GPS points recorded' : 'Run too short to save',
         noGps
-          ? "Stride didn't receive any usable GPS fixes during this run, so there's no route or distance to save."
+          ? "Pacebook didn't receive any usable GPS fixes during this run, so there's no route or distance to save."
           : 'Runs shorter than 10 metres are not saved.',
         [
           { text: 'Back to run', style: 'cancel' },
@@ -456,7 +456,7 @@ function hintText(o: {
   if (!o.idle && !o.hasPoints && o.signal !== 'ready') return 'No usable GPS fix yet. Distance starts counting once one arrives.';
   if (o.idle && o.signal === 'weak') return 'Weak signal. Head outside with a clear view of the sky for the best accuracy.';
   if (!o.idle && o.signal === 'lost') return 'GPS signal lost. Recording continues when it returns.';
-  if (!o.idle && o.mode === 'foreground' && !IS_WEB) return 'Background tracking isn’t available in this build. Keep Stride open while you run.';
+  if (!o.idle && o.mode === 'foreground' && !IS_WEB) return 'Background tracking isn’t available in this build. Keep Pacebook open while you run.';
   return null;
 }
 
@@ -491,14 +491,14 @@ function AccessPanel({
   switch (access?.access) {
     case 'undetermined':
       title = 'Allow location to record runs';
-      body = 'Stride uses your location while you record to map your route and measure distance and pace.';
+      body = 'Pacebook uses your location while you record to map your route and measure distance and pace.';
       action = { title: 'Allow location', onPress: onAsk };
       break;
     case 'denied':
       title = 'Location access is off';
       body = IS_WEB
         ? "Allow location for this site (the icon in your browser's address bar), then try again."
-        : 'Stride needs location access to track your route, distance and pace.';
+        : 'Pacebook needs location access to track your route, distance and pace.';
       action = access.canAskAgain
         ? { title: 'Allow location', onPress: onAsk }
         : canOpenSettings
@@ -512,7 +512,7 @@ function AccessPanel({
       break;
     case 'approximate':
       title = 'Precise location is off';
-      body = 'With approximate location your position is only known to within hundreds of metres, so Stride can’t measure a run. Turn on Precise Location for Stride in Settings.';
+      body = 'With approximate location your position is only known to within hundreds of metres, so Pacebook can’t measure a run. Turn on Precise Location for Pacebook in Settings.';
       action = { title: 'Open Settings', onPress: openSettings };
       break;
     case 'unavailable':
