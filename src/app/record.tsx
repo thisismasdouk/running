@@ -1,21 +1,25 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import { router, useNavigation } from 'expo-router';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RouteMap } from '@/components/RouteMap';
 import { useColors, type Colors } from '@/components/theme';
 import { Button, Stat } from '@/components/ui';
+import { WorkoutPanel, WorkoutPreview } from '@/components/WorkoutPanel';
 import { confirm, notice, showDialog } from '@/lib/confirm';
+import { stepAnnouncement } from '@/lib/cues';
 import { buzz, say } from '@/lib/feedback';
 import { distanceUnit, formatDistanceValue, formatDuration, formatPaceValue, paceUnit } from '@/lib/format';
 import { FIRST_FIX_ACCURACY_M, MAX_ACCURACY_M } from '@/lib/geo';
 import { gps, gpsSignal, useGps } from '@/lib/gps';
+import { syncRunToHealth } from '@/lib/healthSync';
 import { goBack } from '@/lib/nav';
-import { currentPace, currentSplit, movingMs, recorder, useRecorder } from '@/lib/recorder';
+import { resolveWorkout } from '@/lib/plans';
+import { currentLap, currentPace, currentSplit, movingMs, recorder, useRecorder, type RecorderWorkout } from '@/lib/recorder';
 import { buildRun } from '@/lib/runs';
 import { paceSecPerKm } from '@/lib/stats';
 import {
@@ -30,7 +34,8 @@ import {
   type AccessResult,
 } from '@/lib/tracking';
 import type { TrackPoint } from '@/lib/types';
-import { saveRun, useProfile } from '@/store';
+import { flattenWorkout } from '@/lib/workouts';
+import { getProfile, recordRunInPlan, saveRun, useActivePlan, useProfile, useShoes, useWorkouts } from '@/store';
 
 const KEEP_AWAKE_TAG = 'run';
 const IS_WEB = Platform.OS === 'web';
@@ -64,7 +69,19 @@ export default function Record() {
   const rec = useRecorder();
   const g = useGps();
   const profile = useProfile();
+  const shoes = useShoes();
   const units = profile.units;
+  // Opened from a workout or plan session: /record?workout=<id>&session=<key>.
+  const params = useLocalSearchParams<{ workout?: string; session?: string }>();
+  const custom = useWorkouts();
+  const active = useActivePlan();
+  const planned = useMemo((): RecorderWorkout | null => {
+    const w = resolveWorkout(params.workout, custom, active);
+    if (!w) return null;
+    const steps = flattenWorkout(w);
+    if (steps.length === 0) return null;
+    return { id: w.id, name: w.name, runType: w.runType, steps, ...(params.session ? { sessionKey: params.session } : {}) };
+  }, [params.workout, params.session, custom, active]);
   const [access, setAccess] = useState<AccessResult | null>(null);
   const [lastKnown, setLastKnown] = useState<TrackPoint | null>(null);
   const [busy, setBusy] = useState(false);
@@ -173,9 +190,9 @@ export default function Record() {
 
   const go = useCallback(() => {
     setCountdown(null);
-    recorder.start(Date.now(), simulateNext.current);
-    say('Run started.');
-  }, []);
+    recorder.start(Date.now(), simulateNext.current, planned);
+    say(planned ? `${planned.name}. ${stepAnnouncement(planned.steps[0], getProfile().units)}` : 'Run started.');
+  }, [planned]);
 
   useEffect(() => {
     if (countdown == null) return;
@@ -216,6 +233,11 @@ export default function Record() {
   const cancelCountdown = () => {
     setCountdown(null);
     stopTracking();
+  };
+
+  // The "Lap N" cue (or, in a workout, the next step's) is spoken by useRunFeedback from the recorder's event.
+  const lap = () => {
+    recorder.lap();
   };
 
   const pause = () => {
@@ -260,8 +282,15 @@ export default function Record() {
     }
     stopping.current = true;
     await stopTracking();
-    const run = buildRun(recorder.finish());
-    saveRun(run);
+    const result = recorder.finish();
+    const run = buildRun(result);
+    // The default shoe is preselected; the save screen can change it.
+    const shoe = shoes.find((x) => x.id === profile.defaultShoeId && !x.retired);
+    const saved = shoe ? { ...run, shoeId: shoe.id } : run;
+    saveRun(saved);
+    void syncRunToHealth(saved.id);
+    // Tick off the plan session it was started from, or one it matches that day.
+    recordRunInPlan(saved, result.workout?.sessionKey);
     router.replace({ pathname: '/edit/[id]', params: { id: run.id, fresh: '1' } });
   };
 
@@ -277,6 +306,10 @@ export default function Record() {
   const livePace = currentPace(rec);
   const avgPace = paceSecPerKm(rec.distanceM, moving);
   const split = currentSplit(rec, now);
+  // In a workout, laps are the steps and the workout panel shows them.
+  const liveLap = rec.lapMarks.length > 0 && !rec.workout ? currentLap(rec, now) : null;
+  const workoutView = idle ? planned : rec.workout;
+  const stepsLeft = rec.workout != null && rec.lapMarks.length < rec.workout.steps.length;
   // The first fix of a segment must meet the recorder's stricter first-fix accuracy, so only call
   // the signal "ready" at that accuracy until the current segment has its first point.
   const lastSeg = rec.segments[rec.segments.length - 1];
@@ -324,10 +357,12 @@ export default function Record() {
         ) : (
           <>
             {runBlocked && <AccessPanel access={access} onAsk={() => refresh(true)} onRetry={() => refresh(false)} />}
+            {idle && planned && <WorkoutPreview workout={planned} />}
+            {!idle && <WorkoutPanel rec={rec} now={now} units={units} livePace={livePace} />}
             <View style={styles.bigStat}>
               {rec.status === 'paused' && <Text style={[styles.state, { color: c.muted }]}>PAUSED</Text>}
               {rec.autoPaused && <Text style={[styles.state, { color: c.warn }]}>AUTO-PAUSED</Text>}
-              <Stat label="Time" value={formatDuration(moving)} size="xl" align="center" />
+              <Stat label="Time" value={formatDuration(moving)} size={workoutView ? 'lg' : 'xl'} align="center" />
             </View>
             <View style={styles.statRow}>
               <Stat label="Distance" value={formatDistanceValue(rec.distanceM, units)} unit={distanceUnit(units)} size="lg" align="center" />
@@ -344,6 +379,11 @@ export default function Record() {
                 {rec.lastSplit && (
                   <Text style={[styles.split, { color: c.muted }]}>
                     Last {distanceUnit(units)} {formatDuration(rec.lastSplit.ms)}
+                  </Text>
+                )}
+                {liveLap && (
+                  <Text style={[styles.split, { color: c.accent }]} accessibilityLabel={`Lap ${liveLap.index} in progress`}>
+                    LAP {liveLap.index} · {formatDuration(liveLap.ms)} · {formatDistanceValue(liveLap.distanceM, units)} {distanceUnit(units)}
                   </Text>
                 )}
               </View>
@@ -369,7 +409,20 @@ export default function Record() {
                   disabled={busy || countdown != null || access?.access !== 'granted'}
                 />
               )}
-              {rec.status === 'recording' && <RoundButton label="Pause" onPress={pause} color={c.text} icon="pause" />}
+              {rec.status === 'recording' && (
+                <>
+                  <RoundButton
+                    label={stepsLeft ? 'Next step' : 'Lap'}
+                    onPress={lap}
+                    color={c.accent}
+                    icon={stepsLeft ? 'play-skip-forward' : 'timer-outline'}
+                    small
+                  />
+                  <RoundButton label="Pause" onPress={pause} color={c.text} icon="pause" />
+                  {/* Keeps Pause centred. */}
+                  <View style={styles.spacer} />
+                </>
+              )}
               {rec.status === 'paused' && (
                 <>
                   <RoundButton label="Discard" onPress={discard} color={c.danger} icon="trash" small />
@@ -605,6 +658,7 @@ const styles = StyleSheet.create({
   splitRow: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', columnGap: 16, rowGap: 4, marginTop: -6 },
   split: { fontSize: 13, fontWeight: '600', fontVariant: ['tabular-nums'] },
   controls: { flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center', marginTop: 4 },
+  spacer: { width: 64 },
   hint: { textAlign: 'center', fontSize: 13, lineHeight: 18 },
   access: { gap: 12 },
   accessTitle: { fontSize: 18, fontWeight: '700', textAlign: 'center' },

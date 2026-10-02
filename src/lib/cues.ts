@@ -1,45 +1,154 @@
 import { METRES_PER_MILE } from './stats';
-import type { Units } from './types';
+import type { FlatStep, StepTarget, Units } from './types';
+import type { StepCue } from './workouts';
 
 /*
  * Text for the spoken audio cues. Kept free of any speech API so it can be
  * unit tested; lib/feedback.ts does the speaking.
+ *
+ * Numbers are written out as words ("five minutes twenty-nine") rather than
+ * "5:29": speech engines read clock-style tokens as times of day or digit by
+ * digit, which is what made the old cues sound robotic.
  */
 
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const ONES = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
 
-/** 3725000 → "1 hour 2 minutes 5 seconds", 342000 → "5 minutes 42 seconds". */
+/** 29 → "twenty-nine", 342 → "three hundred and forty-two". Whole numbers up to 999,999. */
+export function numberToWords(n: number): string {
+  n = Math.max(0, Math.round(n));
+  if (n < 20) return ONES[n];
+  if (n < 100) return TENS[Math.floor(n / 10)] + (n % 10 ? `-${ONES[n % 10]}` : '');
+  if (n < 1000) {
+    const rest = n % 100;
+    return `${ONES[Math.floor(n / 100)]} hundred${rest ? ` and ${numberToWords(rest)}` : ''}`;
+  }
+  const rest = n % 1000;
+  return `${numberToWords(Math.floor(n / 1000))} thousand${rest ? `${rest < 100 ? ' and' : ''} ${numberToWords(rest)}` : ''}`;
+}
+
+const count = (n: number, word: string) => `${numberToWords(n)} ${word}${n === 1 ? '' : 's'}`;
+const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/**
+ * How a runner would say a time: 329000 → "five minutes twenty-nine",
+ * 305000 → "five minutes and five seconds", 42000 → "forty-two seconds",
+ * 3725000 → "one hour, two minutes and five seconds".
+ */
 export function spokenDuration(ms: number): string {
   const total = Math.max(0, Math.round(ms / 1000));
   const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
-  const parts: string[] = [];
-  if (h) parts.push(plural(h, 'hour'));
-  if (m) parts.push(plural(m, 'minute'));
-  if (s || parts.length === 0) parts.push(plural(s, 'second'));
-  return parts.join(' ');
+  if (h === 0 && m === 0) return count(s, 'second');
+  if (h === 0) {
+    if (s === 0) return count(m, 'minute');
+    // "five minutes twenty-nine" is natural, "five minutes five" is not.
+    return s >= 10 ? `${count(m, 'minute')} ${numberToWords(s)}` : `${count(m, 'minute')} and ${count(s, 'second')}`;
+  }
+  const parts = [count(h, 'hour')];
+  if (m) parts.push(count(m, 'minute'));
+  if (s) parts.push(count(s, 'second'));
+  return parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
 
 const unitWord = (units: Units) => (units === 'metric' ? 'kilometre' : 'mile');
 
-/** Pace given in seconds per km → "5 minutes 51 seconds per kilometre" (or per mile). */
+/** Seconds per km, given per km or per mile as a duration in ms (or NaN when unknown). */
+function paceMsPerUnit(secPerKm: number, units: Units): number {
+  if (!Number.isFinite(secPerKm) || secPerKm <= 0) return NaN;
+  return (units === 'metric' ? secPerKm : secPerKm * (METRES_PER_MILE / 1000)) * 1000;
+}
+
+/** Pace given in seconds per km → "five minutes fifty-one per kilometre" (or per mile). */
 export function spokenPace(secPerKm: number, units: Units): string {
-  if (!Number.isFinite(secPerKm) || secPerKm <= 0) return 'unknown';
-  const perUnit = units === 'metric' ? secPerKm : secPerKm * (METRES_PER_MILE / 1000);
-  return `${spokenDuration(perUnit * 1000)} per ${unitWord(units)}`;
+  const ms = paceMsPerUnit(secPerKm, units);
+  if (Number.isNaN(ms)) return 'unknown';
+  return `${spokenDuration(ms)} per ${unitWord(units)}`;
 }
 
 export type SplitCue = { index: number; distanceM: number; movingMs: number; splitMs: number; splitM: number };
 
-/** "3 kilometres. Time 17 minutes 42 seconds. Split pace …. Average pace …." */
+/**
+ * "One kilometre. Five minutes twenty-nine per kilometre. Total time five minutes twenty-nine."
+ * From the second split on, the last split and the average are both given:
+ * "Three kilometres. Last kilometre five minutes fifty-one. Average five minutes fifty-four per kilometre. Total time …"
+ */
 export function splitAnnouncement(cue: SplitCue, units: Units): string {
   const splitPace = cue.splitM > 0 ? cue.splitMs / cue.splitM : 0;
   const avgPace = cue.distanceM > 0 ? cue.movingMs / cue.distanceM : 0;
+  const total = `Total time ${spokenDuration(cue.movingMs)}.`;
+  const head = `${capitalise(count(cue.index, unitWord(units)))}.`;
+  if (cue.index <= 1) return [head, `${capitalise(spokenPace(splitPace, units))}.`, total].join(' ');
+  const last = paceMsPerUnit(splitPace, units);
   return [
-    `${plural(cue.index, unitWord(units))}.`,
-    `Time ${spokenDuration(cue.movingMs)}.`,
-    `Split pace ${spokenPace(splitPace, units)}.`,
-    `Average pace ${spokenPace(avgPace, units)}.`,
-  ].join(' ');
+    head,
+    Number.isNaN(last) ? null : `Last ${unitWord(units)} ${spokenDuration(last)}.`,
+    `Average ${spokenPace(avgPace, units)}.`,
+    total,
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+/** "Lap three. One minute fifty-two." */
+export function lapAnnouncement(index: number, lapMs: number): string {
+  return `Lap ${numberToWords(index)}. ${capitalise(spokenDuration(lapMs))}.`;
+}
+
+/** What "Test voice" says: a realistic first split. */
+export const SAMPLE_CUE: SplitCue = { index: 1, distanceM: 1000, movingMs: 329_000, splitMs: 329_000, splitM: 1000 };
+
+/* ---------- Guided workouts ---------- */
+
+/** A step's target as said aloud: "four hundred metres", "five kilometres", "ninety seconds", "three minutes". */
+export function spokenTarget(t: StepTarget): string {
+  if (t.type === 'distance') {
+    const m = Math.round(t.metres);
+    if (m % 1000 === 0) return count(m / 1000, 'kilometre');
+    if (m < 2000) return `${numberToWords(m)} metres`;
+    // 2500 → "two point five kilometres".
+    const [whole, frac] = String(parseFloat((m / 1000).toFixed(2))).split('.');
+    return `${numberToWords(Number(whole))} point ${frac
+      .split('')
+      .map((d) => ONES[Number(d)])
+      .join(' ')} kilometres`;
+  }
+  const s = Math.round(t.seconds);
+  // Runners say "ninety seconds" for short recoveries, not "one minute thirty".
+  if (s < 120 && s % 60 !== 0) return count(s, 'second');
+  return spokenDuration(s * 1000);
+}
+
+/** "Interval two of six. Four hundred metres. Go." / "Recover. Ninety seconds." / "Warm-up. Ten minutes." */
+export function stepAnnouncement(step: FlatStep, units: Units): string {
+  const target = `${capitalise(spokenTarget(step.target))}.`;
+  // "Target four minutes thirty to four minutes forty per kilometre."
+  const pace = step.pace ? ` Target ${spokenDuration(paceMsPerUnit(step.pace.min, units))} to ${spokenPace(step.pace.max, units)}.` : '';
+  switch (step.kind) {
+    case 'warmup':
+      return `Warm-up. ${target}${pace}`;
+    case 'cooldown':
+      return `Cool-down. ${target}${pace}`;
+    case 'recover':
+      return `Recover. ${target}${pace}`;
+    case 'run':
+      return step.reps
+        ? `Interval ${numberToWords(step.rep ?? 1)} of ${numberToWords(step.reps)}. ${target}${pace} Go.`
+        : `Run. ${target}${pace} Go.`;
+  }
+}
+
+/** What to say for a workout cue, given the workout's steps. */
+export function workoutCueText(cue: StepCue, steps: FlatStep[], units: Units): string {
+  switch (cue.type) {
+    case 'step':
+      return stepAnnouncement(steps[cue.index], units);
+    case 'halfway':
+      return 'Halfway.';
+    case 'last100':
+      return 'Last hundred metres.';
+    case 'done':
+      return 'Workout complete. Nice work. Keep recording or press Finish.';
+  }
 }

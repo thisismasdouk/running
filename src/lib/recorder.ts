@@ -12,9 +12,21 @@ import {
   GAP_MS,
   haversine,
 } from './geo';
-import type { Segment, TrackPoint } from './types';
+import { lapsFromMarks, type LapMark } from './laps';
+import type { FlatStep, RunType, Segment, TrackPoint } from './types';
+import { advanceWorkout, type StepCue } from './workouts';
 
 export type RecorderStatus = 'idle' | 'recording' | 'paused';
+
+/** The workout being followed, copied in at Start so a relaunch mid-run doesn't depend on it still existing. */
+export type RecorderWorkout = {
+  id: string;
+  name: string;
+  runType: RunType;
+  steps: FlatStep[];
+  /** The training plan session this run was started from. */
+  sessionKey?: string;
+};
 
 export type RecorderState = {
   status: RecorderStatus;
@@ -36,16 +48,24 @@ export type RecorderState = {
   lastSplit: { index: number; ms: number } | null;
   /** Fed by the web demo's simulated GPS. */
   simulated: boolean;
+  /** Run totals at each Lap press. In a workout, at each step boundary. */
+  lapMarks: LapMark[];
+  /** Set for a guided workout, null for a free run. */
+  workout: RecorderWorkout | null;
 };
 
 export type RecorderEvent =
   | { type: 'split'; index: number; distanceM: number; movingMs: number; splitMs: number; splitM: number }
+  | { type: 'lap'; index: number; distanceM: number; movingMs: number }
   | { type: 'autopause' }
-  | { type: 'autoresume' };
+  | { type: 'autoresume' }
+  | { type: 'workout'; cue: StepCue; steps: FlatStep[] };
 
 const KEY = 'recorder';
 /** Fixes up to this much older than the start/resume time are still used (device and GPS clocks can disagree). */
 const STALE_WINDOW_MS = 30_000;
+/** Lap presses closer together than this (in moving time) are treated as a double tap. */
+const MIN_LAP_MS = 1000;
 /** Write the in-progress run to disk at most this often, plus on pause/finish and when the app backgrounds. */
 const PERSIST_EVERY_MS = 10_000;
 
@@ -62,6 +82,8 @@ const IDLE: RecorderState = {
   splitAtMs: 0,
   lastSplit: null,
   simulated: false,
+  lapMarks: [],
+  workout: null,
 };
 
 function load(): RecorderState {
@@ -82,6 +104,8 @@ let dirty = false;
 let newestSeen = -Infinity;
 /** Previous raw fix while auto-paused, to measure speed for auto-resume. */
 let lastRaw: TrackPoint | null = null;
+/** Run totals when the workout was last advanced, so halfway cues fire once. Null after a relaunch. */
+let workoutCheckedAt: LapMark | null = null;
 
 const current = () => (state ??= load());
 
@@ -107,6 +131,22 @@ function set(next: RecorderState, force = false) {
 
 const emit = (e: RecorderEvent) => eventListeners.forEach((l) => l(e));
 
+/**
+ * Moves a guided workout on to the run's current totals: adds a lap mark at
+ * each step boundary passed and returns the cues to announce. A free run
+ * comes back unchanged.
+ */
+function advance(s: RecorderState, now: number): { next: RecorderState; events: RecorderEvent[] } {
+  if (!s.workout || s.status !== 'recording') return { next: s, events: [] };
+  const to = { distanceM: s.distanceM, movingMs: movingMs(s, now) };
+  const from = workoutCheckedAt ?? to;
+  workoutCheckedAt = to;
+  const { marks, cues } = advanceWorkout(s.workout.steps, s.lapMarks, from, to);
+  const steps = s.workout.steps;
+  const events = cues.map((cue): RecorderEvent => ({ type: 'workout', cue, steps }));
+  return { next: marks.length ? { ...s, lapMarks: [...s.lapMarks, ...marks] } : s, events };
+}
+
 export const recorder = {
   get: current,
 
@@ -128,8 +168,9 @@ export const recorder = {
   splitLength: 1000,
   autoPause: false,
 
-  start(now = Date.now(), simulated = false) {
+  start(now = Date.now(), simulated = false, workout: RecorderWorkout | null = null) {
     lastRaw = null;
+    workoutCheckedAt = { distanceM: 0, movingMs: 0 };
     set(
       {
         ...IDLE,
@@ -139,6 +180,7 @@ export const recorder = {
         resumedAt: now,
         notBefore: Math.max(newestSeen + 1, now - STALE_WINDOW_MS),
         simulated,
+        workout,
       },
       true,
     );
@@ -167,16 +209,53 @@ export const recorder = {
     );
   },
 
+  /**
+   * Ends the current lap and starts the next one. Returns the lap just
+   * completed (1-based), or null when not recording or pressed twice in a row.
+   * In a workout this skips to the next step (announced as that step).
+   */
+  lap(now = Date.now()) {
+    const s = current();
+    if (s.status !== 'recording') return null;
+    const moving = movingMs(s, now);
+    const prev = s.lapMarks[s.lapMarks.length - 1] ?? { distanceM: 0, movingMs: 0 };
+    if (moving - prev.movingMs < MIN_LAP_MS) return null;
+    const mark = { distanceM: s.distanceM, movingMs: moving };
+    set({ ...s, lapMarks: [...s.lapMarks, mark] }, true);
+    const lap = { index: s.lapMarks.length + 1, distanceM: mark.distanceM - prev.distanceM, movingMs: mark.movingMs - prev.movingMs };
+    const steps = s.workout?.steps;
+    if (steps && s.lapMarks.length < steps.length) {
+      workoutCheckedAt = mark;
+      const next = s.lapMarks.length + 1;
+      emit({ type: 'workout', cue: next < steps.length ? { type: 'step', index: next } : { type: 'done' }, steps });
+    } else {
+      emit({ type: 'lap', ...lap });
+    }
+    return lap;
+  },
+
+  /** Moves a workout's time-based steps on between GPS fixes. Does nothing on a free run. */
+  tick(now = Date.now()) {
+    const s = current();
+    if (!s.workout || s.status !== 'recording') return;
+    const { next, events } = advance(s, now);
+    if (next !== s) set(next, true);
+    events.forEach(emit);
+  },
+
   /** Clears the in-progress run and returns what was recorded. */
   finish(now = Date.now()) {
     const s = current();
+    const moving = movingMs(s, now);
     const result = {
       startedAt: s.startedAt ?? now,
       segments: s.segments.filter((seg) => seg.length > 0),
       distanceM: s.distanceM,
-      movingMs: movingMs(s, now),
+      movingMs: moving,
       elapsedMs: now - (s.startedAt ?? now),
       simulated: s.simulated,
+      laps: lapsFromMarks(s.lapMarks, { distanceM: s.distanceM, movingMs: moving }),
+      workout: s.workout,
     };
     set(IDLE, true);
     return result;
@@ -279,8 +358,10 @@ export const recorder = {
     }
 
     segments[segments.length - 1] = seg;
-    set({ ...s, segments, distanceM, bankedMs, resumedAt, autoPaused, splitIndex, splitAtMs, lastSplit });
-    events.forEach(emit);
+    const { next, events: cues } = advance({ ...s, segments, distanceM, bankedMs, resumedAt, autoPaused, splitIndex, splitAtMs, lastSplit }, now);
+    // A step boundary is written straight away so a relaunch keeps the laps.
+    set(next, next.lapMarks !== s.lapMarks);
+    [...events, ...cues].forEach(emit);
   },
 };
 
@@ -318,6 +399,16 @@ export function currentSplit(s: RecorderState, now = Date.now(), len = recorder.
   return { index: s.splitIndex + 1, distanceM: d, ms };
 }
 
+/** The lap in progress: distance and moving time since the last Lap press (or the start). */
+export function currentLap(s: RecorderState, now = Date.now()) {
+  const prev = s.lapMarks[s.lapMarks.length - 1] ?? { distanceM: 0, movingMs: 0 };
+  return {
+    index: s.lapMarks.length + 1,
+    distanceM: Math.max(0, s.distanceM - prev.distanceM),
+    ms: Math.max(0, movingMs(s, now) - prev.movingMs),
+  };
+}
+
 export function useRecorder(): RecorderState {
   return useSyncExternalStore(recorder.subscribe, recorder.get, recorder.get);
 }
@@ -329,6 +420,7 @@ export function __resetRecorder() {
   dirty = false;
   newestSeen = -Infinity;
   lastRaw = null;
+  workoutCheckedAt = null;
   listeners.clear();
   eventListeners.clear();
   recorder.splitLength = 1000;

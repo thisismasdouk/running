@@ -37,6 +37,7 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen name="progress" options={{ title: 'Progress', tabBarIcon: icon('stats-chart') }} />
+      <Tabs.Screen name="food" options={{ title: 'Food', tabBarIcon: icon('restaurant') }} />
       <Tabs.Screen name="profile" options={{ title: 'You', tabBarIcon: icon('person') }} />
     </Tabs>
   );

@@ -3,14 +3,19 @@ import { router } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
+import { HealthSettings } from '@/components/HealthSettings';
+import { ShoeList } from '@/components/ShoeList';
 import { useColors } from '@/components/theme';
 import { Button, Card, SectionTitle, Stat } from '@/components/ui';
-import { confirm } from '@/lib/confirm';
+import { VoiceSettings } from '@/components/VoiceSettings';
+import { confirm, notice } from '@/lib/confirm';
 import { distanceUnit, formatDistanceValue } from '@/lib/format';
-import { sampleRuns } from '@/lib/sample';
+import { runFromGpx } from '@/lib/gpx';
+import { SAMPLE_SHOE, sampleFood, sampleRuns } from '@/lib/sample';
+import { pickTextFile } from '@/lib/share';
 import { totals, unitLength } from '@/lib/stats';
 import type { Units } from '@/lib/types';
-import { deleteRun, saveRun, updateProfile, useProfile, useRuns } from '@/store';
+import { deleteFood, deleteRun, deleteShoe, getFood, saveFood, saveRun, saveShoe, updateProfile, useProfile, useRuns } from '@/store';
 
 export default function Profile() {
   const c = useColors();
@@ -31,12 +36,34 @@ export default function Profile() {
     updateProfile({ units: u, weeklyGoalM: goal * unitLength(u) });
   };
 
+  const importGpx = async () => {
+    try {
+      const xml = await pickTextFile();
+      if (xml == null) return;
+      const run = runFromGpx(xml);
+      if (!run) {
+        await notice('Nothing to import', 'That file has no timed GPS track. Export the activity as GPX from Strava, Garmin or your watch app.');
+        return;
+      }
+      const dupe = runs.find((r) => Math.abs(r.startedAt - run.startedAt) < 60_000);
+      if (dupe && !(await confirm('Already imported?', `"${dupe.title}" starts at the same time.`, 'Import anyway'))) return;
+      saveRun({ ...run, ...(profile.defaultShoeId ? { shoeId: profile.defaultShoeId } : {}) });
+      router.push(`/run/${run.id}`);
+    } catch (e) {
+      await notice('Couldn’t import', e instanceof Error ? e.message : String(e));
+    }
+  };
+
   const toggleSamples = async () => {
     if (hasSamples) {
-      if (!(await confirm('Remove sample runs?', 'Your own runs are kept.', 'Remove', true))) return;
+      if (!(await confirm('Remove sample data?', 'Your own runs and meals are kept.', 'Remove', true))) return;
       runs.filter((r) => r.id.startsWith('sample-')).forEach((r) => deleteRun(r.id));
+      deleteShoe(SAMPLE_SHOE.id);
+      getFood().filter((e) => e.id.startsWith('sample-food-')).forEach((e) => deleteFood(e.id));
     } else {
+      saveShoe(SAMPLE_SHOE);
       sampleRuns().forEach(saveRun);
+      sampleFood().forEach(saveFood);
     }
   };
 
@@ -96,7 +123,7 @@ export default function Profile() {
         />
         <Toggle
           label="Voice cues"
-          detail="Speak your time and pace at each split"
+          detail="Speak your time and pace at each split, and workout steps"
           value={profile.audioCues}
           onChange={(audioCues) => updateProfile({ audioCues })}
         />
@@ -114,12 +141,29 @@ export default function Profile() {
         />
       </Card>
 
+      <SectionTitle>Voice</SectionTitle>
+      <VoiceSettings profile={profile} />
+
+      <SectionTitle>Health & body</SectionTitle>
+      <HealthSettings profile={profile} />
+
+      <SectionTitle>Shoes</SectionTitle>
+      <ShoeList runs={runs} units={units} defaultShoeId={profile.defaultShoeId} />
+
+      <SectionTitle>Import</SectionTitle>
+      <Card style={{ gap: 12 }}>
+        <Text style={{ color: c.muted, lineHeight: 20 }}>
+          Bring in runs from Strava, Garmin or a watch as GPX files. To share a run, open it and tap the share icon.
+        </Text>
+        <Button title="Import a GPX file" onPress={importGpx} variant="secondary" />
+      </Card>
+
       <SectionTitle>Try it out</SectionTitle>
       <Card style={{ gap: 12 }}>
         <Text style={{ color: c.muted, lineHeight: 20 }}>
-          Load a few weeks of made-up runs to explore the feed, splits and records before your next outing.
+          Load a few weeks of made-up runs and a week of meals to explore the feed, records and food log before your next outing.
         </Text>
-        <Button title={hasSamples ? 'Remove sample runs' : 'Load sample runs'} onPress={toggleSamples} variant="secondary" />
+        <Button title={hasSamples ? 'Remove sample data' : 'Load sample runs'} onPress={toggleSamples} variant="secondary" />
       </Card>
 
       <SectionTitle>About</SectionTitle>
@@ -127,7 +171,7 @@ export default function Profile() {
         <Pressable accessibilityRole="link" onPress={() => router.push('/privacy')} style={styles.link}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.settingLabel, { color: c.text }]}>Privacy</Text>
-            <Text style={{ color: c.muted, fontSize: 13 }}>Your runs never leave this device</Text>
+            <Text style={{ color: c.muted, fontSize: 13 }}>Your runs and meals stay on this device</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={c.muted} />
         </Pressable>

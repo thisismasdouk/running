@@ -3,9 +3,11 @@ import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { formatDate, formatDistanceValue, distanceUnit, formatDuration, formatPace } from '@/lib/format';
+import { runTypeOf } from '@/lib/runs';
 import { paceSecPerKm } from '@/lib/stats';
 import type { Run, Units } from '@/lib/types';
 import { FluidRouteShape } from './RouteShape';
+import { RunTypeBadge } from './RunTypeBadge';
 import { useColors } from './theme';
 import { Card, Stat } from './ui';
 
@@ -20,7 +22,10 @@ export const RunCard = memo(function RunCard({ run, units, prCount }: { run: Run
               {run.title}
             </Text>
             {run.simulated && <Text style={[styles.badge, { color: c.muted }]}>SIMULATED (DEMO)</Text>}
-            <Text style={{ color: c.muted, fontSize: 13 }}>{formatDate(run.startedAt)}</Text>
+            <View style={styles.meta}>
+              <RunTypeBadge type={runTypeOf(run)} />
+              <Text style={{ color: c.muted, fontSize: 13 }}>{formatDate(run.startedAt)}</Text>
+            </View>
           </View>
           <View style={styles.stats}>
             <Stat label="Distance" value={formatDistanceValue(run.distanceM, units)} unit={distanceUnit(units)} />
@@ -45,7 +50,8 @@ export const RunCard = memo(function RunCard({ run, units, prCount }: { run: Run
 
 const styles = StyleSheet.create({
   card: { gap: 12 },
-  head: { gap: 2 },
+  head: { gap: 4 },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { fontSize: 18, fontWeight: '700' },
   stats: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
   pr: { fontWeight: '700' },

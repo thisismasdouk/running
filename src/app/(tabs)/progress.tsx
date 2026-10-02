@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { WeeklyBars } from '@/components/charts';
 import { useColors } from '@/components/theme';
+import { TrainingSection } from '@/components/Training';
 import { Card, Empty, SectionTitle, Stat } from '@/components/ui';
 import { distanceUnit, formatDate, formatDistanceValue, formatDuration, formatElevation, formatPace } from '@/lib/format';
 import { BEST_EFFORTS, paceSecPerKm, personalRecords, totals, weeklySummaries, weekStreak } from '@/lib/stats';
@@ -38,9 +39,10 @@ export default function Progress() {
 
   if (runs.length === 0) {
     return (
-      <View style={{ flex: 1, backgroundColor: c.bg, justifyContent: 'center' }}>
+      <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={styles.content}>
+        <TrainingSection />
         <Empty title="Nothing to chart yet" body="Your weekly mileage, totals and personal records will appear after your first run." />
-      </View>
+      </ScrollView>
     );
   }
 
@@ -48,6 +50,9 @@ export default function Progress() {
 
   return (
     <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={styles.content}>
+      <TrainingSection />
+
+      <SectionTitle>Mileage</SectionTitle>
       <Card style={{ gap: 12 }}>
         <View style={styles.row}>
           <Text style={[styles.cardTitle, { color: c.text }]}>Last 12 weeks</Text>

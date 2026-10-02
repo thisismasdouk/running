@@ -1,5 +1,5 @@
 // jest.mock calls are hoisted above these imports by babel-jest.
-import { __resetRecorder, currentPace, currentSplit, movingMs, recorder, type RecorderEvent } from '../recorder';
+import { __resetRecorder, currentLap, currentPace, currentSplit, movingMs, recorder, type RecorderEvent } from '../recorder';
 import type { TrackPoint } from '../types';
 import { straightRun } from '@/test/helpers';
 import { haversine, totalDistance } from '../geo';
@@ -178,6 +178,134 @@ describe('recorder', () => {
       recorder.pause(60_000);
       expect(recorder.get().autoPaused).toBe(false);
       expect(recorder.get().status).toBe('paused');
+    });
+  });
+
+  describe('laps', () => {
+    it('records lap boundaries and reports the lap in progress', () => {
+      const events: RecorderEvent[] = [];
+      recorder.on((e) => events.push(e));
+      recorder.start(0);
+      const pts = straightRun(1000, 300);
+      recorder.addPoints(pts.filter((p) => p.t <= 120_000));
+      const first = recorder.lap(120_000);
+      expect(first?.index).toBe(1);
+      expect(first?.movingMs).toBe(120_000);
+      expect(first?.distanceM).toBeCloseTo(400, -1);
+      expect(events.filter((e) => e.type === 'lap')).toHaveLength(1);
+
+      recorder.addPoints(pts.filter((p) => p.t > 120_000 && p.t <= 180_000));
+      const live = currentLap(recorder.get(), 180_000);
+      expect(live.index).toBe(2);
+      expect(live.ms).toBe(60_000);
+      expect(live.distanceM).toBeCloseTo(200, -1);
+    });
+
+    it('ignores a double tap and presses while paused or idle', () => {
+      expect(recorder.lap(0)).toBeNull();
+      recorder.start(0);
+      recorder.addPoints(straightRun(200, 300));
+      expect(recorder.lap(60_000)).not.toBeNull();
+      expect(recorder.lap(60_400)).toBeNull();
+      recorder.pause(70_000);
+      expect(recorder.lap(80_000)).toBeNull();
+      expect(recorder.get().lapMarks).toHaveLength(1);
+    });
+
+    it('lap times are moving time, excluding pauses', () => {
+      recorder.start(0);
+      recorder.addPoints(straightRun(300, 300));
+      recorder.pause(90_000);
+      recorder.resume(200_000);
+      const lap = recorder.lap(230_000);
+      expect(lap?.movingMs).toBe(120_000);
+    });
+
+    it('finishing closes the last lap and returns all laps', () => {
+      recorder.start(0);
+      const pts = straightRun(1000, 300);
+      recorder.addPoints(pts.filter((p) => p.t <= 150_000));
+      recorder.lap(150_000);
+      recorder.addPoints(pts.filter((p) => p.t > 150_000));
+      const result = recorder.finish(300_000);
+      expect(result.laps).toHaveLength(2);
+      expect(result.laps[0].movingMs + result.laps[1].movingMs).toBe(300_000);
+      expect(result.laps[0].distanceM + result.laps[1].distanceM).toBeCloseTo(1000, 0);
+    });
+
+    it('a run without Lap presses has no laps', () => {
+      recorder.start(0);
+      recorder.addPoints(straightRun(500, 300));
+      expect(recorder.finish(150_000).laps).toEqual([]);
+    });
+
+    it('keeps laps across a reload', () => {
+      recorder.start(0);
+      recorder.addPoints(straightRun(300, 300));
+      recorder.lap(60_000);
+      const saved = mockStore.get('recorder');
+      __resetRecorder();
+      if (saved) mockStore.set('recorder', saved);
+      expect(recorder.get().lapMarks).toHaveLength(1);
+    });
+  });
+
+  describe('workouts', () => {
+    const workout = {
+      id: 'w',
+      name: '2 × 400 m',
+      runType: 'intervals' as const,
+      steps: [
+        { kind: 'run' as const, target: { type: 'distance' as const, metres: 400 }, rep: 1, reps: 2 },
+        { kind: 'recover' as const, target: { type: 'time' as const, seconds: 60 }, rep: 1, reps: 2 },
+        { kind: 'run' as const, target: { type: 'distance' as const, metres: 400 }, rep: 2, reps: 2 },
+      ],
+    };
+
+    it('marks a lap at each step boundary and announces each step', () => {
+      const events: RecorderEvent[] = [];
+      recorder.on((e) => events.push(e));
+      recorder.start(0, false, workout);
+      // 400 m at 4:00/km takes 96 s.
+      const pts = straightRun(1000, 240);
+      for (let i = 0; i < 100; i++) recorder.addPoints([pts[i]], pts[i].t);
+      expect(recorder.get().lapMarks).toHaveLength(1);
+      expect(recorder.get().lapMarks[0].distanceM).toBeCloseTo(400, 6);
+      expect(recorder.get().lapMarks[0].movingMs).toBeCloseTo(96_000, -2);
+      // The 60 s recovery ends on the clock, between fixes.
+      recorder.tick(156_500);
+      expect(recorder.get().lapMarks).toHaveLength(2);
+      expect(recorder.get().lapMarks[1].movingMs).toBeCloseTo(156_000, -2);
+      for (let i = 100; i < pts.length; i++) recorder.addPoints([pts[i]], pts[i].t);
+      const cues = events.flatMap((e) => (e.type === 'workout' ? [e.cue] : []));
+      expect(cues.filter((c) => c.type !== 'last100')).toEqual([{ type: 'step', index: 1 }, { type: 'step', index: 2 }, { type: 'done' }]);
+      expect(events.some((e) => e.type === 'lap')).toBe(false);
+
+      const result = recorder.finish(pts[pts.length - 1].t);
+      expect(result.workout?.id).toBe('w');
+      // Three steps plus what was run after the workout ended.
+      expect(result.laps).toHaveLength(4);
+      expect(result.laps[0].distanceM).toBeCloseTo(400, 6);
+      expect(result.laps[1].movingMs).toBeCloseTo(60_000, -2);
+      expect(result.laps[2].distanceM).toBeCloseTo(400, 6);
+    });
+
+    it('Lap skips to the next step', () => {
+      const events: RecorderEvent[] = [];
+      recorder.on((e) => events.push(e));
+      recorder.start(0, false, workout);
+      recorder.addPoints(straightRun(100, 240));
+      recorder.lap(30_000);
+      expect(recorder.get().lapMarks).toHaveLength(1);
+      expect(events.filter((e) => e.type === 'workout').map((e) => e.type === 'workout' && e.cue)).toEqual([{ type: 'step', index: 1 }]);
+    });
+
+    it('free runs are unchanged', () => {
+      recorder.start(0);
+      recorder.addPoints(straightRun(1000, 240));
+      recorder.tick(500_000);
+      expect(recorder.get().workout).toBeNull();
+      expect(recorder.get().lapMarks).toEqual([]);
     });
   });
 });

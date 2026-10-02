@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Line, Path } from 'react-native-svg';
 
-import { formatDistanceValue, formatElevation, formatPaceValue } from '@/lib/format';
+import { distanceUnit, formatDistanceValue, formatDuration, formatElevation, formatPaceValue, paceUnit } from '@/lib/format';
 import type { ProgressSample } from '@/lib/geo';
-import type { WeekSummary } from '@/lib/stats';
-import type { Split, Units } from '@/lib/types';
+import { paceRange, type PacePoint } from '@/lib/pace';
+import { paceSecPerKm, type WeekSummary } from '@/lib/stats';
+import type { Lap, Split, Units } from '@/lib/types';
 import { useColors } from './theme';
 
 /** Vertical bars of weekly distance, most recent week highlighted. */
@@ -120,7 +121,83 @@ export function ElevationChart({ samples, height = 100 }: { samples: ProgressSam
   );
 }
 
+/**
+ * Smoothed pace against distance. The y axis is inverted so faster running
+ * sits higher; a dashed line marks the average pace.
+ */
+export function PaceChart({ series, avgPace, units, height = 120 }: { series: PacePoint[]; avgPace: number; units: Units; height?: number }) {
+  const c = useColors();
+  const [width, setWidth] = useState(0);
+  const range = paceRange(series);
+  if (!range || series.length < 2) return null;
+  const { fast, slow } = range;
+  const maxD = series[series.length - 1].d || 1;
+  const x = (d: number) => (d / maxD) * width;
+  // Paces beyond the slow cap are drawn at the bottom edge.
+  const y = (p: number) => 4 + ((Math.min(p, slow) - fast) / (slow - fast)) * (height - 8);
+  const line = series.map((p, i) => `${i ? 'L' : 'M'}${x(p.d).toFixed(1)},${y(p.pace).toFixed(1)}`).join('');
+  const avgY = y(avgPace);
+  return (
+    <View style={{ gap: 4 }}>
+      <View style={styles.paceBody}>
+        <View style={[styles.paceAxis, { height }]}>
+          <Text style={[styles.axisLabel, { color: c.muted }]}>{formatPaceValue(fast, units)}</Text>
+          <Text style={[styles.axisLabel, { color: c.muted }]}>{formatPaceValue(slow, units)}</Text>
+        </View>
+        <View style={{ flex: 1, height }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+          {width > 0 && (
+            <Svg width={width} height={height}>
+              <Path d={`${line}L${width},${height}L0,${height}Z`} fill={c.accent} opacity={0.15} />
+              {avgPace > 0 && avgY > 0 && avgY < height && (
+                <Line x1={0} x2={width} y1={avgY} y2={avgY} stroke={c.muted} strokeWidth={1} strokeDasharray="4 4" />
+              )}
+              <Path d={line} stroke={c.accent} strokeWidth={2} fill="none" />
+            </Svg>
+          )}
+        </View>
+      </View>
+      <View style={styles.paceFoot}>
+        <Text style={[styles.axisLabel, { color: c.muted }]}>
+          {paceUnit(units)} · avg {formatPaceValue(avgPace, units)} (dashed)
+        </Text>
+        <Text style={[styles.axisLabel, { color: c.muted }]}>
+          {formatDistanceValue(maxD, units, 1)} {distanceUnit(units)}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+/** Manual laps: distance, time and pace for each. */
+export function LapsTable({ laps, units }: { laps: Lap[]; units: Units }) {
+  const c = useColors();
+  return (
+    <View style={{ gap: 6 }}>
+      <View style={styles.splitRow}>
+        <Text style={[styles.splitHead, { color: c.muted, width: 36 }]}>Lap</Text>
+        <Text style={[styles.splitHead, { color: c.muted, flex: 1 }]}>{distanceUnit(units)}</Text>
+        <Text style={[styles.splitHead, { color: c.muted, width: 72, textAlign: 'right' }]}>Time</Text>
+        <Text style={[styles.splitHead, { color: c.muted, width: 72, textAlign: 'right' }]}>Pace</Text>
+      </View>
+      {laps.map((lap, i) => (
+        <View key={i} style={styles.splitRow}>
+          <Text style={[styles.splitCell, { color: c.text, width: 36 }]}>{i + 1}</Text>
+          <Text style={[styles.splitCell, { color: c.text, flex: 1 }]}>{formatDistanceValue(lap.distanceM, units)}</Text>
+          <Text style={[styles.splitCell, { color: c.text, width: 72, textAlign: 'right' }]}>{formatDuration(lap.movingMs)}</Text>
+          <Text style={[styles.splitCell, { color: c.muted, width: 72, textAlign: 'right' }]}>
+            {formatPaceValue(lap.distanceM >= 20 ? paceSecPerKm(lap.distanceM, lap.movingMs) : 0, units)}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  paceBody: { flexDirection: 'row', gap: 6 },
+  paceAxis: { justifyContent: 'space-between', width: 40 },
+  paceFoot: { flexDirection: 'row', justifyContent: 'space-between', paddingLeft: 46 },
+  axisLabel: { fontSize: 11, fontWeight: '600', fontVariant: ['tabular-nums'] },
   bars: { flexDirection: 'row', alignItems: 'flex-end' },
   barCol: { flex: 1, alignItems: 'center', justifyContent: 'flex-end' },
   barValue: { fontSize: 11, fontWeight: '700', marginBottom: 2 },
