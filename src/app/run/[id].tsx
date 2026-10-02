@@ -8,6 +8,7 @@ import { RouteMap } from '@/components/RouteMap';
 import { RunTypeBadge } from '@/components/RunTypeBadge';
 import { useColors } from '@/components/theme';
 import { Card, Empty, SectionTitle, Stat } from '@/components/ui';
+import { WorkoutResults } from '@/components/WorkoutSteps';
 import { confirm } from '@/lib/confirm';
 import { distanceUnit, formatDateTime, formatDistanceValue, formatDuration, formatElevation, formatPace, formatPaceValue, paceUnit } from '@/lib/format';
 import { progressSeries } from '@/lib/geo';
@@ -71,6 +72,12 @@ export default function RunDetail() {
             <RunTypeBadge type={runTypeOf(run)} />
             <Text style={{ color: c.muted }}>{formatDateTime(run.startedAt)}</Text>
           </View>
+          {run.workoutName && (
+            <View style={styles.meta}>
+              <Ionicons name="barbell-outline" size={14} color={c.muted} />
+              <Text style={{ color: c.muted }}>Workout: {run.workoutName}</Text>
+            </View>
+          )}
           {shoe && (
             <View style={styles.meta}>
               <Ionicons name="footsteps-outline" size={14} color={c.muted} />
@@ -120,7 +127,16 @@ export default function RunDetail() {
           </>
         )}
 
-        {run.laps && run.laps.length > 0 && (
+        {run.workoutSteps && run.workoutSteps.length > 0 && (
+          <>
+            <SectionTitle>Workout</SectionTitle>
+            <Card>
+              <WorkoutResults steps={run.workoutSteps} laps={run.laps ?? []} units={units} />
+            </Card>
+          </>
+        )}
+
+        {!run.workoutSteps?.length && run.laps && run.laps.length > 0 && (
           <>
             <SectionTitle>Laps</SectionTitle>
             <Card>

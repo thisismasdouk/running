@@ -1,5 +1,6 @@
 import { METRES_PER_MILE } from './stats';
-import type { Units } from './types';
+import type { FlatStep, StepTarget, Units } from './types';
+import type { StepCue } from './workouts';
 
 /*
  * Text for the spoken audio cues. Kept free of any speech API so it can be
@@ -97,3 +98,57 @@ export function lapAnnouncement(index: number, lapMs: number): string {
 
 /** What "Test voice" says: a realistic first split. */
 export const SAMPLE_CUE: SplitCue = { index: 1, distanceM: 1000, movingMs: 329_000, splitMs: 329_000, splitM: 1000 };
+
+/* ---------- Guided workouts ---------- */
+
+/** A step's target as said aloud: "four hundred metres", "five kilometres", "ninety seconds", "three minutes". */
+export function spokenTarget(t: StepTarget): string {
+  if (t.type === 'distance') {
+    const m = Math.round(t.metres);
+    if (m % 1000 === 0) return count(m / 1000, 'kilometre');
+    if (m < 2000) return `${numberToWords(m)} metres`;
+    // 2500 → "two point five kilometres".
+    const [whole, frac] = String(parseFloat((m / 1000).toFixed(2))).split('.');
+    return `${numberToWords(Number(whole))} point ${frac
+      .split('')
+      .map((d) => ONES[Number(d)])
+      .join(' ')} kilometres`;
+  }
+  const s = Math.round(t.seconds);
+  // Runners say "ninety seconds" for short recoveries, not "one minute thirty".
+  if (s < 120 && s % 60 !== 0) return count(s, 'second');
+  return spokenDuration(s * 1000);
+}
+
+/** "Interval two of six. Four hundred metres. Go." / "Recover. Ninety seconds." / "Warm-up. Ten minutes." */
+export function stepAnnouncement(step: FlatStep, units: Units): string {
+  const target = `${capitalise(spokenTarget(step.target))}.`;
+  // "Target four minutes thirty to four minutes forty per kilometre."
+  const pace = step.pace ? ` Target ${spokenDuration(paceMsPerUnit(step.pace.min, units))} to ${spokenPace(step.pace.max, units)}.` : '';
+  switch (step.kind) {
+    case 'warmup':
+      return `Warm-up. ${target}${pace}`;
+    case 'cooldown':
+      return `Cool-down. ${target}${pace}`;
+    case 'recover':
+      return `Recover. ${target}${pace}`;
+    case 'run':
+      return step.reps
+        ? `Interval ${numberToWords(step.rep ?? 1)} of ${numberToWords(step.reps)}. ${target}${pace} Go.`
+        : `Run. ${target}${pace} Go.`;
+  }
+}
+
+/** What to say for a workout cue, given the workout's steps. */
+export function workoutCueText(cue: StepCue, steps: FlatStep[], units: Units): string {
+  switch (cue.type) {
+    case 'step':
+      return stepAnnouncement(steps[cue.index], units);
+    case 'halfway':
+      return 'Halfway.';
+    case 'last100':
+      return 'Last hundred metres.';
+    case 'done':
+      return 'Workout complete. Nice work. Keep recording or press Finish.';
+  }
+}

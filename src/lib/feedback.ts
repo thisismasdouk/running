@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 
 import { getProfile } from '@/store';
-import { lapAnnouncement, SAMPLE_CUE, splitAnnouncement } from './cues';
+import { lapAnnouncement, SAMPLE_CUE, splitAnnouncement, workoutCueText } from './cues';
 import { recorder } from './recorder';
 import { cueLanguage, pickVoice, voicesForLanguage } from './voices';
 
@@ -102,11 +102,21 @@ export function buzz(kind: 'split' | 'tick') {
   p.catch(() => {});
 }
 
+/** How often a workout's time-based steps are checked between GPS fixes. */
+const WORKOUT_TICK_MS = 1000;
+
 /**
- * Split, lap and auto-pause cues. Mounted in the root layout so they keep
- * working whichever screen is showing (or if the app was relaunched mid-run).
+ * Split, lap, auto-pause and workout step cues. Mounted in the root layout so
+ * they keep working whichever screen is showing (or if the app was relaunched mid-run).
  */
 export function useRunFeedback() {
+  useEffect(() => {
+    // Timed steps (90 s recover) end on the clock, not on a fix. With the screen
+    // locked timers may not run, but each background fix advances the workout too.
+    const id = setInterval(() => recorder.tick(), WORKOUT_TICK_MS);
+    return () => clearInterval(id);
+  }, []);
+
   useEffect(() => {
     // Fetch voices early so the first cue doesn't wait.
     loadVoices();
@@ -122,6 +132,10 @@ export function useRunFeedback() {
         say('Auto paused.');
       } else if (e.type === 'autoresume') {
         say('Resumed.');
+      } else if (e.type === 'workout') {
+        // Step changes always buzz: they're the point of a guided workout.
+        if (e.cue.type === 'step' || e.cue.type === 'done') buzz('split');
+        say(workoutCueText(e.cue, e.steps, profile.units));
       }
     });
   }, []);

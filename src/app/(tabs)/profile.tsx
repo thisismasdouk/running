@@ -100,7 +100,7 @@ export default function Profile() {
         />
         <Toggle
           label="Voice cues"
-          detail="Speak your time and pace at each split"
+          detail="Speak your time and pace at each split, and workout steps"
           value={profile.audioCues}
           onChange={(audioCues) => updateProfile({ audioCues })}
         />

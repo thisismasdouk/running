@@ -1,6 +1,6 @@
 import { elevationGain, thin, totalDistance } from './geo';
 import { computeBestEfforts, defaultTitle } from './stats';
-import type { Lap, Run, RunType, Segment } from './types';
+import type { FlatStep, Lap, Run, RunType, Segment } from './types';
 
 export const RUN_TYPES: { key: RunType; label: string }[] = [
   { key: 'easy', label: 'Easy' },
@@ -29,6 +29,7 @@ export function normaliseRun(raw: Run): Run {
   };
   if (run.type && !RUN_TYPES.some((t) => t.key === run.type)) delete run.type;
   if (run.laps && !Array.isArray(run.laps)) delete run.laps;
+  if (run.workoutSteps && !Array.isArray(run.workoutSteps)) delete run.workoutSteps;
   return run;
 }
 
@@ -44,12 +45,16 @@ export function buildRun(rec: {
   elapsedMs: number;
   simulated?: boolean;
   laps?: Lap[];
+  /** The guided workout followed, if any. */
+  workout?: { id: string; name: string; runType: RunType; steps: FlatStep[] } | null;
 }): Run {
   // Best efforts use the full-resolution track; only the stored route is thinned.
   const segments = rec.segments.filter((s) => s.length > 0);
+  // A workout's name ("6 × 400 m") says more than "Morning Run".
+  const title = rec.workout?.name ?? defaultTitle(rec.startedAt);
   return {
     id: newRunId(rec.startedAt),
-    title: rec.simulated ? `Simulated ${defaultTitle(rec.startedAt)}` : defaultTitle(rec.startedAt),
+    title: rec.simulated ? `Simulated ${title}` : title,
     notes: '',
     effort: null,
     startedAt: rec.startedAt,
@@ -61,5 +66,8 @@ export function buildRun(rec: {
     segments: segments.map((s) => thin(s)),
     ...(rec.simulated ? { simulated: true } : {}),
     ...(rec.laps?.length ? { laps: rec.laps } : {}),
+    ...(rec.workout
+      ? { workoutId: rec.workout.id, workoutName: rec.workout.name, workoutSteps: rec.workout.steps, type: rec.workout.runType }
+      : {}),
   };
 }

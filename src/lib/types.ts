@@ -72,6 +72,54 @@ export type Run = {
   /** Manual laps, in order. The last one runs from the final Lap press to Finish. */
   laps?: Lap[];
   shoeId?: string;
+  /** Set when the run was recorded as a guided workout. */
+  workoutId?: string;
+  workoutName?: string;
+  /** The workout's steps in order; laps[i] is the result of workoutSteps[i]. */
+  workoutSteps?: FlatStep[];
+};
+
+export type StepKind = 'warmup' | 'run' | 'recover' | 'cooldown';
+
+/** How long a workout step lasts: a distance or an amount of moving time. */
+export type StepTarget = { type: 'distance'; metres: number } | { type: 'time'; seconds: number };
+
+/** A pace band in seconds per km. `min` is the fast end, `max` the slow end. */
+export type PaceTarget = { min: number; max: number };
+
+export type WorkoutStep = { kind: StepKind; target: StepTarget; pace?: PaceTarget };
+
+/** Steps run `repeat` times in a row, e.g. 6 × [400 m run, 90 s recover]. */
+export type RepeatBlock = { repeat: number; steps: WorkoutStep[] };
+
+export type WorkoutItem = WorkoutStep | RepeatBlock;
+
+/** One step of a workout once repeats are written out, with its place in its repeat block. */
+export type FlatStep = WorkoutStep & { rep?: number; reps?: number };
+
+export type Workout = {
+  id: string;
+  name: string;
+  /** One line shown under the name. */
+  description?: string;
+  /** The run type a run of this workout is saved with. */
+  runType: RunType;
+  items: WorkoutItem[];
+  /** Part of the built-in library (can't be edited or deleted). */
+  builtIn?: boolean;
+  createdAt?: number;
+};
+
+export type SessionStatus = 'done' | 'skipped';
+
+/** The plan the runner is following and how each session went, keyed by session key. */
+export type ActivePlan = {
+  planId: string;
+  /** Local midnight of the plan's first day. */
+  startDate: number;
+  /** Local midnight of race day, if the runner set one. */
+  raceDate?: number;
+  sessions: Record<string, { status: SessionStatus; runId?: string; at: number }>;
 };
 
 export type Profile = {

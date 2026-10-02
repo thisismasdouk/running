@@ -48,3 +48,13 @@ export function formatDateTime(ts: number): string {
   const d = new Date(ts);
   return `${d.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })} at ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
 }
+
+/** "Mon 5 Jan" style, for plan schedules. */
+export function formatShortDate(ts: number): string {
+  return new Date(ts).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+/** A pace band given in seconds per km: "4:30–4:45 /km". */
+export function formatPaceRange(range: { min: number; max: number }, units: Units): string {
+  return `${formatPaceValue(range.min, units)}–${formatPaceValue(range.max, units)} ${paceUnit(units)}`;
+}

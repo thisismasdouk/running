@@ -6,6 +6,7 @@ import { RecordingBanner } from '@/components/RecordingBanner';
 import { RunCard } from '@/components/RunCard';
 import { RUN_TYPE_COLORS } from '@/components/RunTypeBadge';
 import { useColors } from '@/components/theme';
+import { TodaySession } from '@/components/Training';
 import { Button, Card, Chip, Empty, Stat } from '@/components/ui';
 import { distanceUnit, formatDistanceValue, formatDuration } from '@/lib/format';
 import { RUN_TYPES, runTypeLabel, runTypeOf } from '@/lib/runs';
@@ -39,6 +40,7 @@ export default function Home() {
   const header = (
     <View style={{ gap: 12, marginBottom: 12 }}>
       <RecordingBanner units={units} />
+      <TodaySession />
       <Card style={{ gap: 12 }}>
         <View style={styles.row}>
           <Text style={[styles.cardTitle, { color: c.text }]}>This week</Text>

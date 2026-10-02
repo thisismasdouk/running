@@ -249,4 +249,63 @@ describe('recorder', () => {
       expect(recorder.get().lapMarks).toHaveLength(1);
     });
   });
+
+  describe('workouts', () => {
+    const workout = {
+      id: 'w',
+      name: '2 × 400 m',
+      runType: 'intervals' as const,
+      steps: [
+        { kind: 'run' as const, target: { type: 'distance' as const, metres: 400 }, rep: 1, reps: 2 },
+        { kind: 'recover' as const, target: { type: 'time' as const, seconds: 60 }, rep: 1, reps: 2 },
+        { kind: 'run' as const, target: { type: 'distance' as const, metres: 400 }, rep: 2, reps: 2 },
+      ],
+    };
+
+    it('marks a lap at each step boundary and announces each step', () => {
+      const events: RecorderEvent[] = [];
+      recorder.on((e) => events.push(e));
+      recorder.start(0, false, workout);
+      // 400 m at 4:00/km takes 96 s.
+      const pts = straightRun(1000, 240);
+      for (let i = 0; i < 100; i++) recorder.addPoints([pts[i]], pts[i].t);
+      expect(recorder.get().lapMarks).toHaveLength(1);
+      expect(recorder.get().lapMarks[0].distanceM).toBeCloseTo(400, 6);
+      expect(recorder.get().lapMarks[0].movingMs).toBeCloseTo(96_000, -2);
+      // The 60 s recovery ends on the clock, between fixes.
+      recorder.tick(156_500);
+      expect(recorder.get().lapMarks).toHaveLength(2);
+      expect(recorder.get().lapMarks[1].movingMs).toBeCloseTo(156_000, -2);
+      for (let i = 100; i < pts.length; i++) recorder.addPoints([pts[i]], pts[i].t);
+      const cues = events.flatMap((e) => (e.type === 'workout' ? [e.cue] : []));
+      expect(cues.filter((c) => c.type !== 'last100')).toEqual([{ type: 'step', index: 1 }, { type: 'step', index: 2 }, { type: 'done' }]);
+      expect(events.some((e) => e.type === 'lap')).toBe(false);
+
+      const result = recorder.finish(pts[pts.length - 1].t);
+      expect(result.workout?.id).toBe('w');
+      // Three steps plus what was run after the workout ended.
+      expect(result.laps).toHaveLength(4);
+      expect(result.laps[0].distanceM).toBeCloseTo(400, 6);
+      expect(result.laps[1].movingMs).toBeCloseTo(60_000, -2);
+      expect(result.laps[2].distanceM).toBeCloseTo(400, 6);
+    });
+
+    it('Lap skips to the next step', () => {
+      const events: RecorderEvent[] = [];
+      recorder.on((e) => events.push(e));
+      recorder.start(0, false, workout);
+      recorder.addPoints(straightRun(100, 240));
+      recorder.lap(30_000);
+      expect(recorder.get().lapMarks).toHaveLength(1);
+      expect(events.filter((e) => e.type === 'workout').map((e) => e.type === 'workout' && e.cue)).toEqual([{ type: 'step', index: 1 }]);
+    });
+
+    it('free runs are unchanged', () => {
+      recorder.start(0);
+      recorder.addPoints(straightRun(1000, 240));
+      recorder.tick(500_000);
+      expect(recorder.get().workout).toBeNull();
+      expect(recorder.get().lapMarks).toEqual([]);
+    });
+  });
 });

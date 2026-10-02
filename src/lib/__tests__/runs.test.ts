@@ -33,6 +33,14 @@ describe('runs', () => {
     expect(buildRun({ ...rec, laps: [{ distanceM: 500, movingMs: 150_000 }] }).laps).toHaveLength(1);
   });
 
+  it('saves the workout followed', () => {
+    const rec = { startedAt: 0, segments: [straightRun(1000, 300)], movingMs: 300_000, elapsedMs: 300_000 };
+    expect(buildRun(rec).workoutId).toBeUndefined();
+    const steps = [{ kind: 'run' as const, target: { type: 'distance' as const, metres: 1000 } }];
+    const run = buildRun({ ...rec, workout: { id: 'tempo-20', name: '20 min tempo', runType: 'tempo', steps } });
+    expect(run).toMatchObject({ workoutId: 'tempo-20', workoutName: '20 min tempo', title: '20 min tempo', type: 'tempo', workoutSteps: steps });
+  });
+
   it('loads runs saved before types, laps and shoes existed', () => {
     const old = { id: 'a', title: 'Old', startedAt: 0, movingMs: 1, elapsedMs: 1, distanceM: 1, elevationGainM: 0, segments: [] } as unknown as Run;
     const run = normaliseRun(old);

@@ -12,6 +12,9 @@ A running tracker for iOS and Android, built with Expo (SDK 57) and Expo Router.
 - **Voice cues** at every km or mile, phrased the way a coach would say them ("One kilometre. Five minutes twenty-nine per kilometre. Total time five minutes twenty-nine."), plus lap, "Paused" and "Resumed" cues (expo-speech). Split haptics too.
 - **Natural voice**: picks the best installed voice automatically (Premium/Enhanced first, then Siri, never the novelty voices). The You tab lists the voices for your language with their quality, has a speed control and a *Test voice* button, and explains where to download better voices on iPhone.
 - **Manual laps**: a Lap button while recording, with the current lap's time and distance shown live and a "Lap 3" cue. Laps are saved with the run and shown as a table.
+- **Structured workouts**: a library of six (easy 5 km, 6 × 400 m, 5 × 1 km, fartlek 4 × 3 min, 20 min tempo, 90 min long run), plus a simple builder for your own: warm-up, repeats of work and recovery by distance or time with an optional target pace band, and cool-down. Built-in workouts can be customised as a copy.
+- **Guided workout recording**: *Start workout* opens the Record screen in workout mode. A panel shows the current step, what's left of it (metres or time), step x of y, what's next, and *Speed up / Slow down / On pace* against the step's target. Each step is announced ("Interval two of six. Four hundred metres. Go." / "Recover. Ninety seconds."), with halfway and last-hundred-metres cues and a buzz at every change. Lap becomes *Next step*. A lap is marked at every step boundary, at exactly the step's distance or time, so the saved run's laps are the workout's steps; run details show per-step results.
+- **Training plans**: 5K (beginner, 8 weeks), 10K (8 weeks) and half marathon (12 weeks), 3–4 runs a week. Pick a start date or your race date. Home shows *Today's session*; a run saved that day that matches the session ticks it off by itself (or mark it done or skip it by hand). Weekly progress, a week-by-week schedule, and leaving the plan are in *Progress → Training*.
 - **Auto-pause** (optional): the clock stops while you stand still at a crossing and restarts when you run off.
 - **3-2-1 countdown** before recording (tap to skip), so GPS can lock on while you put the phone away.
 - **Activity feed**: run cards with route thumbnails, a weekly-goal progress bar and a weekly streak.
@@ -54,7 +57,7 @@ Android dev and release builds need a Google Maps API key for `react-native-maps
 ## Development
 
 ```bash
-npm test            # unit tests (GPS math, splits, best efforts, recorder incl. auto-pause and laps, cues, voices, pace chart, shoes, simulator)
+npm test            # unit tests (GPS math, splits, best efforts, recorder incl. auto-pause, laps and workouts, cues, voices, pace chart, shoes, simulator, workouts, plans)
 npm run typecheck
 npm run lint
 npm run doctor      # expo-doctor
@@ -81,6 +84,8 @@ src/app/            screens (Expo Router)
   run/[id].tsx      run details
   edit/[id].tsx     save / edit a run
   privacy.tsx       in-app privacy policy
+  workouts/         workout library, detail (Start workout) and builder
+  plans/            training plan picker, setup and schedule
 src/lib/            logic with no UI
   recorder.ts       run state machine (segments, auto-pause, splits), persisted
   tracking.ts       starts/stops GPS sources, permission checks with timeouts
@@ -92,6 +97,8 @@ src/lib/            logic with no UI
   voices.ts         ranks speech voices for the picker and Automatic
   laps.ts, pace.ts  manual laps, smoothed pace-over-distance series
   shoes.ts          shoe mileage and wear warnings
+  workouts.ts       workout model, library, builder form, step engine
+  plans.ts          training plans, schedule, session matching
   runs.ts           builds runs from recordings, run types, normalises old runs
   geo.ts, stats.ts  GPS math, splits, best efforts, records
 src/components/     maps, charts, cards, dialogs, theme

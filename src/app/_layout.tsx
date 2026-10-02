@@ -46,6 +46,11 @@ export default function RootLayout() {
           <Stack.Screen name="run/[id]" options={{ title: 'Run' }} />
           <Stack.Screen name="edit/[id]" options={{ title: 'Save Run', presentation: 'modal' }} />
           <Stack.Screen name="privacy" options={{ title: 'Privacy' }} />
+          <Stack.Screen name="workouts/index" options={{ title: 'Workouts' }} />
+          <Stack.Screen name="workouts/[id]" options={{ title: 'Workout' }} />
+          <Stack.Screen name="workouts/build" options={{ title: 'New Workout', presentation: 'modal' }} />
+          <Stack.Screen name="plans/index" options={{ title: 'Training Plan' }} />
+          <Stack.Screen name="plans/[id]" options={{ title: 'Plan' }} />
         </Stack>
         {Platform.OS === 'web' && <DialogHost />}
       </View>

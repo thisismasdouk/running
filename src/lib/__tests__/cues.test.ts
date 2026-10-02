@@ -1,4 +1,5 @@
-import { lapAnnouncement, numberToWords, SAMPLE_CUE, splitAnnouncement, spokenDuration, spokenPace } from '../cues';
+import { lapAnnouncement, numberToWords, SAMPLE_CUE, splitAnnouncement, spokenDuration, spokenPace, spokenTarget, stepAnnouncement, workoutCueText } from '../cues';
+import { flattenWorkout, libraryWorkout } from '../workouts';
 
 describe('cues', () => {
   it('writes numbers as words', () => {
@@ -51,5 +52,30 @@ describe('cues', () => {
 
   it('announces a lap', () => {
     expect(lapAnnouncement(3, 112_000)).toBe('Lap three. One minute fifty-two.');
+  });
+
+  it('says step targets the way a coach would', () => {
+    expect(spokenTarget({ type: 'distance', metres: 400 })).toBe('four hundred metres');
+    expect(spokenTarget({ type: 'distance', metres: 1000 })).toBe('one kilometre');
+    expect(spokenTarget({ type: 'distance', metres: 5000 })).toBe('five kilometres');
+    expect(spokenTarget({ type: 'distance', metres: 2500 })).toBe('two point five kilometres');
+    expect(spokenTarget({ type: 'distance', metres: 21097.5 })).toBe('twenty-one point one kilometres');
+    expect(spokenTarget({ type: 'time', seconds: 90 })).toBe('ninety seconds');
+    expect(spokenTarget({ type: 'time', seconds: 60 })).toBe('one minute');
+    expect(spokenTarget({ type: 'time', seconds: 180 })).toBe('three minutes');
+  });
+
+  it('announces workout steps', () => {
+    const steps = flattenWorkout(libraryWorkout('intervals-6x400')!);
+    expect(stepAnnouncement(steps[0], 'metric')).toBe('Warm-up. Ten minutes.');
+    expect(stepAnnouncement(steps[3], 'metric')).toBe('Interval two of six. Four hundred metres. Go.');
+    expect(stepAnnouncement(steps[2], 'metric')).toBe('Recover. Ninety seconds.');
+    expect(stepAnnouncement(steps[13], 'metric')).toBe('Cool-down. Ten minutes.');
+    expect(stepAnnouncement({ kind: 'run', target: { type: 'time', seconds: 1200 }, pace: { min: 270, max: 285 } }, 'metric')).toBe(
+      'Run. Twenty minutes. Target four minutes thirty to four minutes forty-five per kilometre. Go.',
+    );
+    expect(workoutCueText({ type: 'last100', index: 1 }, steps, 'metric')).toBe('Last hundred metres.');
+    expect(workoutCueText({ type: 'step', index: 1 }, steps, 'metric')).toBe('Interval one of six. Four hundred metres. Go.');
+    for (const s of steps) expect(stepAnnouncement(s, 'imperial')).not.toMatch(/\d|:/);
   });
 });

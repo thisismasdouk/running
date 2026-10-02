@@ -1,13 +1,17 @@
 import { useSyncExternalStore } from 'react';
 
+import { getPlan, recordRun, setSession, unlinkRun } from '@/lib/plans';
 import { normaliseRun } from '@/lib/runs';
-import type { Profile, Run, Shoe } from '@/lib/types';
+import type { ActivePlan, Profile, Run, SessionStatus, Shoe, Workout } from '@/lib/types';
+import { normaliseWorkout } from '@/lib/workouts';
 import { kv } from './storage';
 
 const RUN_IDS_KEY = 'runs:ids';
 const runKey = (id: string) => `run:${id}`;
 const PROFILE_KEY = 'profile';
 const SHOES_KEY = 'shoes';
+const WORKOUTS_KEY = 'workouts';
+const PLAN_KEY = 'plan';
 
 export const DEFAULT_PROFILE: Profile = {
   name: 'Runner',
@@ -68,6 +72,17 @@ const profileStore = createStore<Profile>(() => ({ ...DEFAULT_PROFILE, ...readJS
 
 const shoesStore = createStore<Shoe[]>(() => readJSON<Shoe[]>(SHOES_KEY) ?? []);
 
+/** The runner's own workouts; the built-in library isn't stored. */
+const workoutsStore = createStore<Workout[]>(() =>
+  (readJSON<Workout[]>(WORKOUTS_KEY) ?? []).map(normaliseWorkout).filter((w): w is Workout => w != null),
+);
+
+/** Null when no plan is being followed. Wrapped so "no plan" is a cached value too. */
+const planStore = createStore<{ plan: ActivePlan | null }>(() => {
+  const raw = readJSON<ActivePlan>(PLAN_KEY);
+  return { plan: raw && getPlan(raw.planId) && typeof raw.startDate === 'number' ? { ...raw, sessions: raw.sessions ?? {} } : null };
+});
+
 function persistIds(runs: Run[]) {
   kv.set(RUN_IDS_KEY, JSON.stringify(runs.map((r) => r.id)));
 }
@@ -81,7 +96,10 @@ export function saveRun(run: Run) {
 
 export function updateRun(id: string, patch: Partial<Pick<Run, 'title' | 'notes' | 'effort' | 'type' | 'shoeId'>>) {
   const run = runsStore.get().find((r) => r.id === id);
-  if (run) saveRun({ ...run, ...patch });
+  if (!run) return;
+  saveRun({ ...run, ...patch });
+  // Setting the type when saving can make the run match that day's plan session.
+  if (patch.type) recordRunInPlan({ ...run, ...patch });
 }
 
 export function deleteRun(id: string) {
@@ -89,6 +107,9 @@ export function deleteRun(id: string) {
   const next = runsStore.get().filter((r) => r.id !== id);
   persistIds(next);
   runsStore.set(next);
+  // A session this run completed is open again.
+  const active = planStore.get().plan;
+  if (active) persistPlan(unlinkRun(active, id));
 }
 
 export function updateProfile(patch: Partial<Profile>) {
@@ -129,7 +150,49 @@ export function deleteShoe(id: string) {
   if (profileStore.get().defaultShoeId === id) updateProfile({ defaultShoeId: null });
 }
 
+/** Adds or replaces one of the runner's own workouts. */
+export function saveWorkout(w: Workout) {
+  const next = [...workoutsStore.get().filter((x) => x.id !== w.id), w].sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+  kv.set(WORKOUTS_KEY, JSON.stringify(next));
+  workoutsStore.set(next);
+}
+
+export function deleteWorkout(id: string) {
+  const next = workoutsStore.get().filter((w) => w.id !== id);
+  kv.set(WORKOUTS_KEY, JSON.stringify(next));
+  workoutsStore.set(next);
+}
+
+export const newWorkoutId = (now = Date.now()) => `wk-${now.toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+
+function persistPlan(plan: ActivePlan | null) {
+  if (plan === planStore.get().plan) return;
+  if (plan) kv.set(PLAN_KEY, JSON.stringify(plan));
+  else kv.remove(PLAN_KEY);
+  planStore.set({ plan });
+}
+
+export function startPlan(planId: string, startDate: number, raceDate?: number) {
+  persistPlan({ planId, startDate, ...(raceDate != null ? { raceDate } : {}), sessions: {} });
+}
+
+export const leavePlan = () => persistPlan(null);
+
+/** Marks a session done or skipped by hand, or with null puts it back to do. */
+export function setSessionStatus(key: string, status: SessionStatus | null) {
+  const active = planStore.get().plan;
+  if (active) persistPlan(setSession(active, key, status));
+}
+
+/** Ticks off the plan session a just-saved run completes (the one it was started from, or a match on that day). */
+export function recordRunInPlan(run: Run, sessionKey?: string) {
+  const active = planStore.get().plan;
+  const plan = getPlan(active?.planId);
+  if (active && plan) persistPlan(recordRun(plan, active, run, sessionKey));
+}
+
 export const getRuns = () => runsStore.get();
+export const getActivePlan = () => planStore.get().plan;
 export const getProfile = () => profileStore.get();
 
 export function useRuns(): Run[] {
@@ -142,6 +205,14 @@ export function useRun(id: string | undefined): Run | undefined {
 
 export function useShoes(): Shoe[] {
   return useSyncExternalStore(shoesStore.subscribe, shoesStore.get, shoesStore.get);
+}
+
+export function useWorkouts(): Workout[] {
+  return useSyncExternalStore(workoutsStore.subscribe, workoutsStore.get, workoutsStore.get);
+}
+
+export function useActivePlan(): ActivePlan | null {
+  return useSyncExternalStore(planStore.subscribe, planStore.get, planStore.get).plan;
 }
 
 export function useProfile(): Profile {
