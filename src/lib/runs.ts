@@ -12,12 +12,13 @@ export function buildRun(rec: {
   segments: Segment[];
   movingMs: number;
   elapsedMs: number;
+  simulated?: boolean;
 }): Run {
   // Best efforts use the full-resolution track; only the stored route is thinned.
   const segments = rec.segments.filter((s) => s.length > 0);
   return {
     id: newRunId(rec.startedAt),
-    title: defaultTitle(rec.startedAt),
+    title: rec.simulated ? `Simulated ${defaultTitle(rec.startedAt)}` : defaultTitle(rec.startedAt),
     notes: '',
     effort: null,
     startedAt: rec.startedAt,
@@ -27,5 +28,6 @@ export function buildRun(rec: {
     elevationGainM: elevationGain(segments),
     bestEfforts: computeBestEfforts(segments),
     segments: segments.map((s) => thin(s)),
+    ...(rec.simulated ? { simulated: true } : {}),
   };
 }

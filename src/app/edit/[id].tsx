@@ -3,36 +3,48 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { useColors } from '@/components/theme';
-import { Button, Card, Stat } from '@/components/ui';
+import { Button, Card, Empty, Stat } from '@/components/ui';
 import { confirm } from '@/lib/confirm';
 import { distanceUnit, formatDistanceValue, formatDuration, formatPaceValue, paceUnit } from '@/lib/format';
+import { goBack } from '@/lib/nav';
 import { paceSecPerKm } from '@/lib/stats';
+import type { Run } from '@/lib/types';
 import { deleteRun, updateRun, useProfile, useRun } from '@/store';
 
 const EFFORT_LABELS = ['Easy', 'Easy', 'Moderate', 'Moderate', 'Moderate', 'Hard', 'Hard', 'Very hard', 'Very hard', 'Max effort'];
 
 export default function EditRun() {
-  const c = useColors();
   const { id, fresh } = useLocalSearchParams<{ id: string; fresh?: string }>();
   const run = useRun(id);
-  const { units } = useProfile();
-  const isNew = fresh === '1';
-  const [title, setTitle] = useState(run?.title ?? '');
-  const [notes, setNotes] = useState(run?.notes ?? '');
-  const [effort, setEffort] = useState<number | null>(run?.effort ?? null);
+  if (!run) {
+    return (
+      <>
+        <Stack.Screen options={{ title: 'Edit Run' }} />
+        <Empty title="Run not found" body="It may have been deleted." />
+      </>
+    );
+  }
+  // Keyed so the form's state is initialised from the run it edits.
+  return <EditForm key={run.id} run={run} isNew={fresh === '1'} />;
+}
 
-  if (!run) return null;
+function EditForm({ run, isNew }: { run: Run; isNew: boolean }) {
+  const c = useColors();
+  const { units } = useProfile();
+  const [title, setTitle] = useState(run.title);
+  const [notes, setNotes] = useState(run.notes);
+  const [effort, setEffort] = useState<number | null>(run.effort);
 
   const save = () => {
     updateRun(run.id, { title: title.trim() || run.title, notes: notes.trim(), effort });
     if (isNew) router.replace(`/run/${run.id}`);
-    else router.back();
+    else goBack(`/run/${run.id}`);
   };
 
   const discard = async () => {
     if (!(await confirm('Discard run?', 'This run will be deleted and cannot be recovered.', 'Discard', true))) return;
     deleteRun(run.id);
-    router.back();
+    goBack();
   };
 
   const input = [styles.input, { color: c.text, backgroundColor: c.card, borderColor: c.border }];

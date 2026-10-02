@@ -5,10 +5,10 @@ import type { Segment, TrackPoint } from '@/lib/types';
 import { RouteShape } from './RouteShape';
 import { useColors } from './theme';
 
-type Props = { segments: Segment[]; style?: ViewStyle; live?: boolean; initial?: TrackPoint | null };
+type Props = { segments: Segment[]; style?: ViewStyle; live?: boolean; initial?: TrackPoint | null; status?: string };
 
 /** react-native-maps has no web implementation, so web draws the route shape without map tiles. */
-export function RouteMap({ segments, style }: Props) {
+export function RouteMap({ segments, style, status = 'Waiting for GPS…' }: Props) {
   const c = useColors();
   const [size, setSize] = useState({ width: 0, height: 0 });
   const hasRoute = segments.some((s) => s.length > 1);
@@ -20,7 +20,7 @@ export function RouteMap({ segments, style }: Props) {
       {hasRoute && size.width > 0 ? (
         <RouteShape segments={segments} width={size.width} height={size.height} strokeWidth={4} padding={24} />
       ) : (
-        <Text style={{ color: c.muted }}>Waiting for GPS…</Text>
+        <Text style={{ color: c.muted }}>{status}</Text>
       )}
     </View>
   );

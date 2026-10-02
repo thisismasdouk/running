@@ -1,20 +1,22 @@
-import { Link, router } from 'expo-router';
-import { useMemo } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { useCallback, useMemo } from 'react';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 
+import { RecordingBanner } from '@/components/RecordingBanner';
 import { RunCard } from '@/components/RunCard';
 import { useColors } from '@/components/theme';
 import { Button, Card, Empty, Stat } from '@/components/ui';
 import { distanceUnit, formatDistanceValue, formatDuration } from '@/lib/format';
-import { useRecorder } from '@/lib/recorder';
 import { personalRecords, weeklySummaries, weekStreak } from '@/lib/stats';
+import type { Run } from '@/lib/types';
 import { useProfile, useRuns } from '@/store';
+
+const Separator = () => <View style={{ height: 12 }} />;
 
 export default function Home() {
   const c = useColors();
   const runs = useRuns();
   const profile = useProfile();
-  const rec = useRecorder();
   const units = profile.units;
 
   const week = useMemo(() => weeklySummaries(runs, 1)[0], [runs]);
@@ -25,19 +27,14 @@ export default function Home() {
     return m;
   }, [runs]);
   const goalPct = Math.min(1, week.distanceM / Math.max(profile.weeklyGoalM, 1));
+  const renderItem = useCallback(
+    ({ item }: { item: Run }) => <RunCard run={item} units={units} prCount={prCounts.get(item.id) ?? 0} />,
+    [units, prCounts],
+  );
 
   const header = (
     <View style={{ gap: 12, marginBottom: 12 }}>
-      {rec.status !== 'idle' && (
-        <Link href="/record" asChild>
-          <Pressable style={[styles.banner, { backgroundColor: c.accent }]}>
-            <Text style={styles.bannerText}>
-              {rec.status === 'paused' ? '⏸ Run paused' : '● Recording'} · {formatDistanceValue(rec.distanceM, units)}{' '}
-              {distanceUnit(units)} — tap to return
-            </Text>
-          </Pressable>
-        </Link>
-      )}
+      <RecordingBanner units={units} />
       <Card style={{ gap: 12 }}>
         <View style={styles.row}>
           <Text style={[styles.cardTitle, { color: c.text }]}>This week</Text>
@@ -69,8 +66,8 @@ export default function Home() {
       data={runs}
       keyExtractor={(r) => r.id}
       ListHeaderComponent={header}
-      ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-      renderItem={({ item }) => <RunCard run={item} units={units} prCount={prCounts.get(item.id) ?? 0} />}
+      ItemSeparatorComponent={Separator}
+      renderItem={renderItem}
       ListEmptyComponent={
         <Empty title="No runs yet" body="Lace up and record your first run. Your activities, splits and records will show up here.">
           <Button title="Start a run" onPress={() => router.push('/record')} style={{ marginTop: 12 }} />
@@ -86,6 +83,4 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 18, fontWeight: '700' },
   track: { height: 8, borderRadius: 4, overflow: 'hidden' },
   fill: { height: 8, borderRadius: 4 },
-  banner: { borderRadius: 12, padding: 12 },
-  bannerText: { color: '#fff', fontWeight: '700', textAlign: 'center' },
 });

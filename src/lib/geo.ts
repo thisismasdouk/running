@@ -14,8 +14,26 @@ export function haversine(a: Pick<TrackPoint, 'lat' | 'lon'>, b: Pick<TrackPoint
 
 /** Fixes worse than this are too noisy to use. */
 export const MAX_ACCURACY_M = 35;
+/**
+ * The first fix of a segment anchors everything after it (later fixes are
+ * speed-checked against it), so it has to be better than the usual limit.
+ * Cold-start fixes are often within 35 m yet off-position.
+ */
+export const FIRST_FIX_ACCURACY_M = 20;
 /** ~13 m/s is faster than any human runs; anything above it is a GPS jump. */
 export const MAX_SPEED_MPS = 13;
+
+/** A gap without fixes longer than this starts a new segment instead of drawing a straight line across it. */
+export const GAP_MS = 30_000;
+
+/** Auto-pause: slower than this over the window counts as standing still. */
+export const AUTO_PAUSE_SPEED_MPS = 0.6;
+export const AUTO_PAUSE_WINDOW_MS = 10_000;
+/** How much of the window must be covered by fixes before deciding. */
+export const AUTO_PAUSE_MIN_SPAN_MS = 8_000;
+/** Auto-resume needs both real displacement from where you stopped and running speed. */
+export const AUTO_RESUME_DISTANCE_M = 10;
+export const AUTO_RESUME_SPEED_MPS = 1.2;
 
 /**
  * Decides whether a new fix should be appended to a segment. It rejects
@@ -23,7 +41,7 @@ export const MAX_SPEED_MPS = 13;
  */
 export function acceptPoint(prev: TrackPoint | undefined, next: TrackPoint): boolean {
   if (next.acc != null && next.acc > MAX_ACCURACY_M) return false;
-  if (!prev) return true;
+  if (!prev) return next.acc == null || next.acc <= FIRST_FIX_ACCURACY_M;
   const dt = (next.t - prev.t) / 1000;
   if (dt <= 0) return false;
   return haversine(prev, next) / dt <= MAX_SPEED_MPS;

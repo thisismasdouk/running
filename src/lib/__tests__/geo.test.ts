@@ -18,6 +18,11 @@ describe('acceptPoint', () => {
     expect(acceptPoint(undefined, { ...p, acc: 80 })).toBe(false);
   });
 
+  it('needs a tighter fix to anchor a segment than to extend one', () => {
+    expect(acceptPoint(undefined, { ...p, acc: 30 })).toBe(false);
+    expect(acceptPoint(p, { ...p, t: 1000, acc: 30 })).toBe(true);
+  });
+
   it('rejects out-of-order fixes', () => {
     expect(acceptPoint({ ...p, t: 1000 }, { ...p, t: 1000 })).toBe(false);
   });

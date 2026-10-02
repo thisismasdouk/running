@@ -11,6 +11,7 @@ const light = {
   muted: '#71717A',
   border: '#E4E4E7',
   good: '#16A34A',
+  warn: '#D97706',
   danger: '#DC2626',
   track: '#E4E4E7',
 };
@@ -24,6 +25,7 @@ const dark: typeof light = {
   muted: '#A1A1AA',
   border: '#27272A',
   good: '#22C55E',
+  warn: '#F59E0B',
   danger: '#F87171',
   track: '#27272A',
 };

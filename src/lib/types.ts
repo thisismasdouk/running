@@ -48,6 +48,8 @@ export type Run = {
   segments: Segment[];
   /** Fastest time in ms for each standard distance reached during this run. */
   bestEfforts: Partial<Record<BestEffortKey, number>>;
+  /** Recorded with the web demo's simulated GPS rather than a real device. */
+  simulated?: boolean;
 };
 
 export type Profile = {
@@ -57,4 +59,10 @@ export type Profile = {
   weeklyGoalM: number;
   /** Announce each km/mile split with a haptic buzz. */
   splitHaptics: boolean;
+  /** Speak split times and paces (and pause/resume) aloud. */
+  audioCues: boolean;
+  /** Stop the clock automatically while standing still. */
+  autoPause: boolean;
+  /** Count down 3-2-1 before recording starts. */
+  countdown: boolean;
 };

@@ -67,6 +67,14 @@ describe('best efforts', () => {
     expect(prs.find((p) => p.key === '5k')?.runId).toBe('b');
     expect(prs.find((p) => p.key === '10k')).toBeUndefined();
   });
+
+  it('credits a tie to the earlier run even when runs are sorted newest first', () => {
+    const prs = personalRecords([
+      run({ id: 'new', startedAt: 2000, bestEfforts: { '1k': 240_000 } }),
+      run({ id: 'old', startedAt: 1000, bestEfforts: { '1k': 240_000 } }),
+    ]);
+    expect(prs.find((p) => p.key === '1k')?.runId).toBe('old');
+  });
 });
 
 describe('weeks', () => {

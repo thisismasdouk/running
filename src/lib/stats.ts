@@ -111,7 +111,8 @@ export function personalRecords(runs: Run[]): PersonalRecord[] {
     let best: PersonalRecord | null = null;
     for (const r of runs) {
       const ms = r.bestEfforts[e.key];
-      if (ms != null && (!best || ms < best.ms)) {
+      // Runs arrive newest first; on a tie the earlier run set the record.
+      if (ms != null && (!best || ms < best.ms || (ms === best.ms && r.startedAt < best.date))) {
         best = { key: e.key, label: e.label, ms, runId: r.id, date: r.startedAt };
       }
     }

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 
+import { haversine } from '@/lib/geo';
 import type { Segment, TrackPoint } from '@/lib/types';
 import { useColors, useIsDark } from './theme';
 
@@ -10,8 +11,10 @@ type Props = {
   style?: ViewStyle;
   /** Live mode: show the user's position and keep the camera on it. */
   live?: boolean;
-  /** Where to centre the map before any route exists. */
+  /** Where to centre the map before any route exists (live mode follows it until the first point). */
   initial?: TrackPoint | null;
+  /** Web only: shown in place of the route while there is none. */
+  status?: string;
 };
 
 const toLatLng = (p: TrackPoint) => ({ latitude: p.lat, longitude: p.lon });
@@ -41,6 +44,17 @@ export function RouteMap({ segments, style, live, initial }: Props) {
       ref.current?.animateCamera({ center: toLatLng(last) }, { duration: 400 });
     }
   }, [live, last]);
+
+  // initialRegion is only read on mount, when the position usually isn't known
+  // yet. Until the first recorded point, follow the live/last-known position.
+  const centred = useRef<TrackPoint | null>(null);
+  useEffect(() => {
+    if (!live || last || !initial) return;
+    if (centred.current && haversine(centred.current, initial) < 20) return;
+    const first = centred.current == null;
+    centred.current = initial;
+    ref.current?.animateCamera({ center: toLatLng(initial), ...(first ? { zoom: 16, altitude: 1200 } : {}) }, { duration: first ? 0 : 400 });
+  }, [live, last, initial]);
 
   const start = all[0] ?? initial;
 

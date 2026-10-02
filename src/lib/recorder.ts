@@ -1,7 +1,17 @@
 import { useSyncExternalStore } from 'react';
 
 import { kv } from '@/store/storage';
-import { acceptPoint, haversine } from './geo';
+import {
+  acceptPoint,
+  AUTO_PAUSE_MIN_SPAN_MS,
+  AUTO_PAUSE_SPEED_MPS,
+  AUTO_PAUSE_WINDOW_MS,
+  AUTO_RESUME_DISTANCE_M,
+  AUTO_RESUME_SPEED_MPS,
+  FIRST_FIX_ACCURACY_M,
+  GAP_MS,
+  haversine,
+} from './geo';
 import type { Segment, TrackPoint } from './types';
 
 export type RecorderStatus = 'idle' | 'recording' | 'paused';
@@ -13,12 +23,46 @@ export type RecorderState = {
   distanceM: number;
   /** Moving time banked from earlier recording stretches. */
   bankedMs: number;
-  /** When the current recording stretch began, or null while paused/idle. */
+  /** When the current recording stretch began, or null while paused/idle/auto-paused. */
   resumedAt: number | null;
+  /** Stopped by auto-pause. The status stays 'recording' so the run resumes by itself. */
+  autoPaused: boolean;
+  /** Fixes timestamped before this are stale (delivered from before the current stretch). */
+  notBefore: number;
+  /** Whole km/miles announced so far, and the moving time when the last one was crossed. */
+  splitIndex: number;
+  splitAtMs: number;
+  /** The last completed split, for the live screen. */
+  lastSplit: { index: number; ms: number } | null;
+  /** Fed by the web demo's simulated GPS. */
+  simulated: boolean;
 };
 
+export type RecorderEvent =
+  | { type: 'split'; index: number; distanceM: number; movingMs: number; splitMs: number; splitM: number }
+  | { type: 'autopause' }
+  | { type: 'autoresume' };
+
 const KEY = 'recorder';
-const IDLE: RecorderState = { status: 'idle', startedAt: null, segments: [], distanceM: 0, bankedMs: 0, resumedAt: null };
+/** Fixes up to this much older than the start/resume time are still used (device and GPS clocks can disagree). */
+const STALE_WINDOW_MS = 30_000;
+/** Write the in-progress run to disk at most this often, plus on pause/finish and when the app backgrounds. */
+const PERSIST_EVERY_MS = 10_000;
+
+const IDLE: RecorderState = {
+  status: 'idle',
+  startedAt: null,
+  segments: [],
+  distanceM: 0,
+  bankedMs: 0,
+  resumedAt: null,
+  autoPaused: false,
+  notBefore: 0,
+  splitIndex: 0,
+  splitAtMs: 0,
+  lastSplit: null,
+  simulated: false,
+};
 
 function load(): RecorderState {
   try {
@@ -31,19 +75,28 @@ function load(): RecorderState {
 
 let state: RecorderState | null = null;
 const listeners = new Set<() => void>();
-const splitListeners = new Set<(distanceM: number) => void>();
-let unsaved = 0;
+const eventListeners = new Set<(e: RecorderEvent) => void>();
+let lastPersist = 0;
+let dirty = false;
+/** Newest fix timestamp seen in any state, so a resume can drop fixes from before it. */
+let newestSeen = -Infinity;
+/** Previous raw fix while auto-paused, to measure speed for auto-resume. */
+let lastRaw: TrackPoint | null = null;
 
 const current = () => (state ??= load());
 
 function persist(force = false) {
-  // Writing the whole track on every fix is wasteful; batch unless forced.
-  if (force || ++unsaved >= 5) {
-    unsaved = 0;
-    const s = current();
-    if (s.status === 'idle') kv.remove(KEY);
-    else kv.set(KEY, JSON.stringify(s));
+  // Serialising the whole track on every fix is wasteful on long runs; write on a timer instead.
+  const now = Date.now();
+  if (!force && now - lastPersist < PERSIST_EVERY_MS) {
+    dirty = true;
+    return;
   }
+  lastPersist = now;
+  dirty = false;
+  const s = current();
+  if (s.status === 'idle') kv.remove(KEY);
+  else kv.set(KEY, JSON.stringify(s));
 }
 
 function set(next: RecorderState, force = false) {
@@ -51,6 +104,8 @@ function set(next: RecorderState, force = false) {
   persist(force);
   listeners.forEach((l) => l());
 }
+
+const emit = (e: RecorderEvent) => eventListeners.forEach((l) => l(e));
 
 export const recorder = {
   get: current,
@@ -62,30 +117,54 @@ export const recorder = {
     };
   },
 
-  /** Called with the new total distance whenever a whole km/mile (per `splitLength`) is crossed. */
-  onSplit(l: (distanceM: number) => void) {
-    splitListeners.add(l);
+  /** Splits (each whole km/mile per `splitLength`) and auto-pause changes. */
+  on(l: (e: RecorderEvent) => void) {
+    eventListeners.add(l);
     return () => {
-      splitListeners.delete(l);
+      eventListeners.delete(l);
     };
   },
 
   splitLength: 1000,
+  autoPause: false,
 
-  start(now = Date.now()) {
-    set({ status: 'recording', startedAt: now, segments: [[]], distanceM: 0, bankedMs: 0, resumedAt: now }, true);
+  start(now = Date.now(), simulated = false) {
+    lastRaw = null;
+    set(
+      {
+        ...IDLE,
+        status: 'recording',
+        startedAt: now,
+        segments: [[]],
+        resumedAt: now,
+        notBefore: Math.max(newestSeen + 1, now - STALE_WINDOW_MS),
+        simulated,
+      },
+      true,
+    );
   },
 
   pause(now = Date.now()) {
     const s = current();
     if (s.status !== 'recording') return;
-    set({ ...s, status: 'paused', bankedMs: s.bankedMs + (now - (s.resumedAt ?? now)), resumedAt: null }, true);
+    const stretch = s.resumedAt != null ? Math.max(0, now - s.resumedAt) : 0;
+    set({ ...s, status: 'paused', bankedMs: s.bankedMs + stretch, resumedAt: null, autoPaused: false }, true);
   },
 
   resume(now = Date.now()) {
     const s = current();
     if (s.status !== 'paused') return;
-    set({ ...s, status: 'recording', resumedAt: now, segments: [...s.segments, []] }, true);
+    lastRaw = null;
+    set(
+      {
+        ...s,
+        status: 'recording',
+        resumedAt: now,
+        segments: [...s.segments, []],
+        notBefore: Math.max(newestSeen + 1, now - STALE_WINDOW_MS),
+      },
+      true,
+    );
   },
 
   /** Clears the in-progress run and returns what was recorded. */
@@ -97,6 +176,7 @@ export const recorder = {
       distanceM: s.distanceM,
       movingMs: movingMs(s, now),
       elapsedMs: now - (s.startedAt ?? now),
+      simulated: s.simulated,
     };
     set(IDLE, true);
     return result;
@@ -106,50 +186,136 @@ export const recorder = {
     set(IDLE, true);
   },
 
-  addPoints(points: TrackPoint[]) {
+  /** Writes any unsaved fixes now, e.g. when the app goes to the background. */
+  flush() {
+    if (dirty) persist(true);
+  },
+
+  addPoints(points: TrackPoint[], now = Date.now()) {
+    if (points.length === 0) return;
+    for (const p of points) newestSeen = Math.max(newestSeen, p.t);
     const s = current();
-    if (s.status !== 'recording' || points.length === 0) return;
+    if (s.status !== 'recording') return;
+
     const segments = s.segments.length ? s.segments.slice() : [[]];
-    const seg = segments[segments.length - 1].slice();
-    let distanceM = s.distanceM;
+    let seg = segments[segments.length - 1].slice();
+    let { distanceM, bankedMs, resumedAt, autoPaused, splitIndex, splitAtMs, lastSplit } = s;
+    const events: RecorderEvent[] = [];
+    const len = recorder.splitLength;
+    const checkSplit = (p: TrackPoint) => {
+      if (Math.floor(distanceM / len) <= splitIndex) return;
+      splitIndex = Math.floor(distanceM / len);
+      const moving = bankedMs + (resumedAt != null ? Math.max(0, p.t - resumedAt) : 0);
+      const splitMs = moving - splitAtMs;
+      splitAtMs = moving;
+      lastSplit = { index: splitIndex, ms: splitMs };
+      events.push({ type: 'split', index: splitIndex, distanceM, movingMs: moving, splitMs, splitM: len });
+    };
+
     for (const p of points) {
-      const prev = seg[seg.length - 1];
-      // Ignore stale fixes delivered from before this recording stretch began.
-      if (s.resumedAt != null && p.t < s.resumedAt - 2000) continue;
+      if (p.t < s.notBefore) continue;
+
+      if (autoPaused) {
+        // Standing still: nothing is recorded until the runner clearly moves off again.
+        const anchor = seg[seg.length - 1];
+        const prevRaw = lastRaw;
+        if (p.acc != null && p.acc > FIRST_FIX_ACCURACY_M) continue;
+        lastRaw = p;
+        const moved = anchor ? haversine(anchor, p) : Infinity;
+        const dt = prevRaw ? (p.t - prevRaw.t) / 1000 : 0;
+        const speed = prevRaw && dt > 0 ? haversine(prevRaw, p) / dt : 0;
+        if (moved >= AUTO_RESUME_DISTANCE_M && speed >= AUTO_RESUME_SPEED_MPS) {
+          autoPaused = false;
+          segments[segments.length - 1] = seg;
+          if (anchor) {
+            // The runner left the stop point about moved/speed ago. Bridge from there so the
+            // metres covered while auto-resume was deciding still count, in distance and time.
+            const leftAt = Math.min(p.t - 1, Math.max(anchor.t + 1, Math.round(p.t - (moved / speed) * 1000)));
+            seg = [{ ...anchor, t: leftAt }, p];
+            distanceM += moved;
+            resumedAt = Math.min(leftAt, now);
+          } else {
+            seg = [p];
+            resumedAt = Math.min(p.t, now);
+          }
+          segments.push(seg);
+          lastRaw = null;
+          events.push({ type: 'autoresume' });
+          checkSplit(p);
+        }
+        continue;
+      }
+
+      let prev: TrackPoint | undefined = seg[seg.length - 1];
+      // A long silence (app killed, watcher suspended) is not a straight line.
+      if (prev && p.t - prev.t > GAP_MS) {
+        segments[segments.length - 1] = seg;
+        seg = [];
+        segments.push(seg);
+        prev = undefined;
+      }
       if (!acceptPoint(prev, p)) continue;
       if (prev) distanceM += haversine(prev, p);
       seg.push(p);
+
+      checkSplit(p);
+
+      if (recorder.autoPause && resumedAt != null) {
+        // Find the oldest fix still inside the window.
+        let i = seg.length - 1;
+        while (i > 0 && p.t - seg[i - 1].t <= AUTO_PAUSE_WINDOW_MS) i--;
+        const span = p.t - seg[i].t;
+        if (span >= AUTO_PAUSE_MIN_SPAN_MS && haversine(seg[i], p) / (span / 1000) < AUTO_PAUSE_SPEED_MPS) {
+          // Stopped since seg[i]: trim the stationary jitter so it adds neither distance nor time.
+          for (let k = i + 1; k < seg.length; k++) distanceM -= haversine(seg[k - 1], seg[k]);
+          seg = seg.slice(0, i + 1);
+          bankedMs += Math.max(0, Math.min(seg[i].t, now) - resumedAt);
+          resumedAt = null;
+          autoPaused = true;
+          lastRaw = p;
+          events.push({ type: 'autopause' });
+        }
+      }
     }
+
     segments[segments.length - 1] = seg;
-    const len = recorder.splitLength;
-    const crossed = Math.floor(distanceM / len) > Math.floor(s.distanceM / len);
-    set({ ...s, segments, distanceM });
-    if (crossed) splitListeners.forEach((l) => l(distanceM));
+    set({ ...s, segments, distanceM, bankedMs, resumedAt, autoPaused, splitIndex, splitAtMs, lastSplit });
+    events.forEach(emit);
   },
 };
 
 export function movingMs(s: RecorderState, now = Date.now()): number {
-  return s.bankedMs + (s.status === 'recording' && s.resumedAt != null ? now - s.resumedAt : 0);
+  return s.bankedMs + (s.status === 'recording' && s.resumedAt != null ? Math.max(0, now - s.resumedAt) : 0);
 }
 
 /**
- * Pace over the last `windowMs` of the current segment in seconds per km,
- * or 0 if there isn't enough data yet.
+ * Pace over roughly the last `windowMs` of moving time in seconds per km,
+ * or 0 if there isn't enough data yet. It reaches back across pauses so the
+ * reading doesn't blank out after every resume.
  */
 export function currentPace(s: RecorderState, windowMs = 30_000): number {
-  const seg = s.segments[s.segments.length - 1];
-  if (!seg || seg.length < 2) return 0;
-  const end = seg[seg.length - 1];
+  if (s.autoPaused) return 0;
   let d = 0;
-  let i = seg.length - 1;
-  while (i > 0 && end.t - seg[i - 1].t <= windowMs) {
-    d += haversine(seg[i - 1], seg[i]);
-    i--;
+  let t = 0;
+  outer: for (let k = s.segments.length - 1; k >= 0; k--) {
+    const seg = s.segments[k];
+    for (let i = seg.length - 1; i > 0; i--) {
+      const dt = seg[i].t - seg[i - 1].t;
+      if (t > 0 && t + dt > windowMs) break outer;
+      d += haversine(seg[i - 1], seg[i]);
+      t += dt;
+    }
   }
-  const dt = end.t - seg[i].t;
   // Standing still or too little data: no meaningful pace.
-  if (d < 10 || dt < 5000) return 0;
-  return dt / d;
+  if (d < 10 || t < 5000) return 0;
+  return t / d;
+}
+
+/** The split in progress: distance and moving time since the last whole km/mile. */
+export function currentSplit(s: RecorderState, now = Date.now(), len = recorder.splitLength) {
+  const d = Math.max(0, s.distanceM - s.splitIndex * len);
+  const ms = Math.max(0, movingMs(s, now) - s.splitAtMs);
+  return { index: s.splitIndex + 1, distanceM: d, ms };
 }
 
 export function useRecorder(): RecorderState {
@@ -159,7 +325,12 @@ export function useRecorder(): RecorderState {
 /** Resets module state; for tests only. */
 export function __resetRecorder() {
   state = null;
-  unsaved = 0;
+  lastPersist = 0;
+  dirty = false;
+  newestSeen = -Infinity;
+  lastRaw = null;
   listeners.clear();
-  splitListeners.clear();
+  eventListeners.clear();
+  recorder.splitLength = 1000;
+  recorder.autoPause = false;
 }
