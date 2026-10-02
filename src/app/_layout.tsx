@@ -50,6 +50,7 @@ export default function RootLayout() {
           <Stack.Screen name="food/[id]" options={{ title: 'Food' }} />
           <Stack.Screen name="food/settings" options={{ title: 'Food & AI Settings' }} />
           <Stack.Screen name="privacy" options={{ title: 'Privacy' }} />
+          <Stack.Screen name="auth/callback" options={{ headerShown: false, animation: 'none' }} />
           <Stack.Screen name="workouts/index" options={{ title: 'Workouts' }} />
           <Stack.Screen name="workouts/[id]" options={{ title: 'Workout' }} />
           <Stack.Screen name="workouts/build" options={{ title: 'New Workout', presentation: 'modal' }} />

@@ -113,9 +113,16 @@
         }
       ],
       "expo-secure-store",
+      "expo-web-browser",
       "./plugins/withoutBackgroundFetch"
     ],
     "scheme": "pacebook",
+    "extra": {
+      "chatgpt": {
+        "clientId": "",
+        "redirectUri": "pacebook://auth/callback"
+      }
+    },
     "experiments": {
       "typedRoutes": true
     }

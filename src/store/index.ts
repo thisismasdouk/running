@@ -35,6 +35,8 @@ export const DEFAULT_PROFILE: Profile = {
   aiModel: DEFAULT_AI_MODEL,
   aiProxyUrl: null,
   aiConsentAt: null,
+  chatgptModel: null,
+  chatgptWelcomeSeen: false,
 };
 
 type Listener = () => void;
