@@ -53,6 +53,9 @@ export default function RunDetail() {
           title: run.title,
           headerRight: () => (
             <View style={{ flexDirection: 'row', gap: 16 }}>
+              <Pressable accessibilityLabel="Share run" onPress={() => router.push(`/share/${run.id}`)} hitSlop={8}>
+                <Ionicons name="share-outline" size={22} color={c.accent} />
+              </Pressable>
               <Pressable accessibilityLabel="Edit run" onPress={() => router.push(`/edit/${run.id}`)} hitSlop={8}>
                 <Ionicons name="create-outline" size={22} color={c.accent} />
               </Pressable>

@@ -6,7 +6,16 @@ import { bounds } from '@/lib/geo';
 import type { Segment } from '@/lib/types';
 import { useColors } from './theme';
 
-type Props = { segments: Segment[]; width: number; height: number; strokeWidth?: number; padding?: number };
+type Props = {
+  segments: Segment[];
+  width: number;
+  height: number;
+  strokeWidth?: number;
+  padding?: number;
+  /** Line colour; the accent by default. */
+  color?: string;
+  background?: string;
+};
 
 /** Thumbnails don't need every fix; a long run has thousands. */
 const MAX_POINTS = 400;
@@ -15,7 +24,7 @@ const MAX_POINTS = 400;
  * Draws a route as a plain line, without map tiles. Used for feed
  * thumbnails and wherever a native map isn't available (web).
  */
-export function RouteShape({ segments, width, height, strokeWidth = 3, padding = 12 }: Props) {
+export function RouteShape({ segments, width, height, strokeWidth = 3, padding = 12, color, background }: Props) {
   const c = useColors();
   const lines = useMemo(() => {
     const b = bounds(segments);
@@ -42,14 +51,14 @@ export function RouteShape({ segments, width, height, strokeWidth = 3, padding =
   const last = lastSeg?.[lastSeg.length - 1];
 
   return (
-    <View style={{ width, height, backgroundColor: c.accentSoft }}>
+    <View style={{ width, height, backgroundColor: background ?? c.accentSoft }}>
       <Svg width={width} height={height}>
         {polylines.map((points, i) => (
           <Polyline
             key={i}
             points={points}
             fill="none"
-            stroke={c.accent}
+            stroke={color ?? c.accent}
             strokeWidth={strokeWidth}
             strokeLinejoin="round"
             strokeLinecap="round"

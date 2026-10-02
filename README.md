@@ -21,6 +21,8 @@ A running tracker for iOS and Android, built with Expo (SDK 57) and Expo Router.
 - **Run details**: route map, splits table with pace bars, pace chart (smoothed over 200 m, faster is higher), laps, elevation profile, best efforts, notes and perceived effort (1–10).
 - **Run types**: easy, long, tempo, intervals, race or recovery, chosen when saving. Shown as a badge, and the Home feed can be filtered by type.
 - **Shoes**: add your shoes in the You tab, pick a default, and choose the pair for each run. Each shoe shows its total distance and warns past 600 km (375 mi). Retire or delete old pairs.
+- **Share a run**: the share icon on a run opens a 4:5 image card (route, distance, pace, time, elevation) in orange, dark or light, ready for Instagram, WhatsApp or Messages via the share sheet. On web the image downloads.
+- **GPX export and import**: export any run as a GPX file to upload to Strava (*Upload activity → File*), Garmin Connect or Komoot. Import GPX files from Strava, Garmin or a watch in the You tab; long gaps inside a track become pauses, and an already-imported run is flagged.
 - **Personal records**: the fastest 400m, 1K, mile, 5K, 10K, half and full marathon found anywhere inside your runs, not only whole-run times.
 - **Progress**: 12-week mileage chart, plus month, year and all-time totals.
 - **Settings**: km or miles, weekly goal, split alerts, voice cues, voice and speed, auto-pause, countdown, and sample runs to explore the app before your first run.

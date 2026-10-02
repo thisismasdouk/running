@@ -10,7 +10,7 @@ While you record a run, Pacebook uses your device's location (GPS) to draw your 
 
 ## Where it is stored
 
-Everything is stored only on your device. Pacebook has no account, no server, no analytics and no advertising. Nothing you record is sent to the developer or to any third party.
+Everything is stored only on your device. Pacebook has no account, no server, no analytics and no advertising. Nothing you record is sent to the developer or to any third party. When you choose to share a run image or export a GPX file, it goes only to the app you pick in the share sheet.
 
 ## Location in the background
 

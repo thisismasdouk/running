@@ -7,9 +7,11 @@ import { ShoeList } from '@/components/ShoeList';
 import { useColors } from '@/components/theme';
 import { Button, Card, SectionTitle, Stat } from '@/components/ui';
 import { VoiceSettings } from '@/components/VoiceSettings';
-import { confirm } from '@/lib/confirm';
+import { confirm, notice } from '@/lib/confirm';
 import { distanceUnit, formatDistanceValue } from '@/lib/format';
+import { runFromGpx } from '@/lib/gpx';
 import { SAMPLE_SHOE, sampleRuns } from '@/lib/sample';
+import { pickTextFile } from '@/lib/share';
 import { totals, unitLength } from '@/lib/stats';
 import type { Units } from '@/lib/types';
 import { deleteRun, deleteShoe, saveRun, saveShoe, updateProfile, useProfile, useRuns } from '@/store';
@@ -31,6 +33,24 @@ export default function Profile() {
     if (u === units) return;
     const goal = Math.max(1, Math.min(300, Math.round(profile.weeklyGoalM / unitLength(u))));
     updateProfile({ units: u, weeklyGoalM: goal * unitLength(u) });
+  };
+
+  const importGpx = async () => {
+    try {
+      const xml = await pickTextFile();
+      if (xml == null) return;
+      const run = runFromGpx(xml);
+      if (!run) {
+        await notice('Nothing to import', 'That file has no timed GPS track. Export the activity as GPX from Strava, Garmin or your watch app.');
+        return;
+      }
+      const dupe = runs.find((r) => Math.abs(r.startedAt - run.startedAt) < 60_000);
+      if (dupe && !(await confirm('Already imported?', `"${dupe.title}" starts at the same time.`, 'Import anyway'))) return;
+      saveRun({ ...run, ...(profile.defaultShoeId ? { shoeId: profile.defaultShoeId } : {}) });
+      router.push(`/run/${run.id}`);
+    } catch (e) {
+      await notice('Couldn’t import', e instanceof Error ? e.message : String(e));
+    }
   };
 
   const toggleSamples = async () => {
@@ -123,6 +143,14 @@ export default function Profile() {
 
       <SectionTitle>Shoes</SectionTitle>
       <ShoeList runs={runs} units={units} defaultShoeId={profile.defaultShoeId} />
+
+      <SectionTitle>Import</SectionTitle>
+      <Card style={{ gap: 12 }}>
+        <Text style={{ color: c.muted, lineHeight: 20 }}>
+          Bring in runs from Strava, Garmin or a watch as GPX files. To share a run, open it and tap the share icon.
+        </Text>
+        <Button title="Import a GPX file" onPress={importGpx} variant="secondary" />
+      </Card>
 
       <SectionTitle>Try it out</SectionTitle>
       <Card style={{ gap: 12 }}>

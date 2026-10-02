@@ -45,6 +45,7 @@ export default function RootLayout() {
           <Stack.Screen name="record" options={{ headerShown: false, presentation: 'fullScreenModal', gestureEnabled: false }} />
           <Stack.Screen name="run/[id]" options={{ title: 'Run' }} />
           <Stack.Screen name="edit/[id]" options={{ title: 'Save Run', presentation: 'modal' }} />
+          <Stack.Screen name="share/[id]" options={{ title: 'Share Run', presentation: 'modal' }} />
           <Stack.Screen name="privacy" options={{ title: 'Privacy' }} />
           <Stack.Screen name="workouts/index" options={{ title: 'Workouts' }} />
           <Stack.Screen name="workouts/[id]" options={{ title: 'Workout' }} />
