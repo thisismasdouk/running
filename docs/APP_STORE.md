@@ -11,13 +11,14 @@ This is the step-by-step checklist for shipping Pacebook with EAS. Everything th
 | Build profiles: `development`, `development-simulator`, `preview`, `production` | `eas.json` |
 | Submit profile `production` (Android goes to the internal track as a draft) | `eas.json` |
 | `ITSAppUsesNonExemptEncryption = NO` (no export compliance question on each upload) | `ios.config.usesNonExemptEncryption: false` |
-| Privacy manifest (`PrivacyInfo.xcprivacy`): no tracking, no collected data, required-reason APIs declared | `ios.privacyManifests` |
+| Privacy manifest (`PrivacyInfo.xcprivacy`): no tracking; meal photos and notes declared as collected for app functionality (not linked); required-reason APIs declared | `ios.privacyManifests` |
 | Location purpose strings; the unused motion permission string is removed | `expo-location` plugin options |
 | Background modes: `location` (run recording), `audio` (voice cues while locked). The unused `fetch` mode is stripped | `ios.infoPlist`, `plugins/withoutBackgroundFetch.js` |
 | Android: no `ACCESS_BACKGROUND_LOCATION` (a foreground service with a notification is used instead), and unused template permissions are blocked | `android.blockedPermissions`, `expo-location` plugin |
 | App icon, Android adaptive icon (foreground, background, monochrome), splash, favicon | `assets/`, regenerate with `npm run icons` |
 | Google Maps key for Android read from an environment variable | `app.config.js` |
 | HealthKit: capability and entitlement, purpose strings for reading heart rate and saving workouts, no background delivery. HealthKit isn't in Expo Go, so the app loads it only in development and App Store builds | `@kingstinct/react-native-healthkit` plugin in `app.json`, `src/lib/health.ios.ts` |
+| Camera and photo-library purpose strings (meal photos); microphone permission removed. The OpenAI key is never bundled: it's stored per device with `expo-secure-store`, or kept on a proxy (`server/openai-proxy`) | `expo-image-picker` and `expo-secure-store` plugins, `src/lib/food-ai.ts` |
 | In-app privacy policy | `src/app/privacy.tsx` (and `docs/PRIVACY.md` to host) |
 
 ## 1. One-time setup
@@ -112,13 +113,18 @@ Suggested text. Avoid naming other apps or brands (e.g. "Strava") anywhere in th
 
 ### App Privacy ("nutrition label")
 
-Choose **"No, we do not collect data from this app."** This is accurate because:
+Because meal photos can be sent to OpenAI (a third party that may keep them up to 30 days), declare:
+
+- **Photos or Videos** → *App Functionality*, **not linked** to the user, **not used for tracking**.
+- **Other User Content** (the optional note typed with a photo) → same answers.
+
+Everything else stays on the device and isn't "collected":
 
 - Location and run data are processed and stored only on the device (on-device processing is not "collection" under Apple's definition).
 - There is no account, analytics, crash reporting SDK, advertising or server.
 - Apple Health data (heart rate read, workouts written) stays on the device too.
 
-The privacy manifest already declares no tracking and no collected data types. If you add analytics or crash reporting later, update both the label and `ios.privacyManifests`.
+Add the same types to `ios.privacyManifests.NSPrivacyCollectedDataTypes` (`NSPrivacyCollectedDataTypePhotosorVideos` and `NSPrivacyCollectedDataTypeOtherUserContent`, purpose `NSPrivacyCollectedDataTypePurposeAppFunctionality`, not linked, not tracking); this is already done in `app.json`. If you add analytics or crash reporting later, update both the label and `ios.privacyManifests`.
 
 ### Screenshots
 
@@ -146,7 +152,9 @@ Paste something like:
 >
 > HealthKit: optional, off by default (You → Apple Health). When on, each run is saved to Health as a running workout with its route, and heart rate for the run's time window is read to show average/max heart rate and zones on the run screen. Health data is stored only on the device and never used for advertising.
 >
-> All data is stored on the device only; nothing is sent to any server.
+> Food tab: meals can be logged by hand, or estimated from a photo with OpenAI. Before the first photo is sent, the app explains that the photo goes to OpenAI and asks for consent (guideline 5.1.2(i)); consent can be withdrawn in Food → Settings. No API key ships in the app: the user adds their own OpenAI key (stored in the Keychain) or the app uses our calorie server. [For review, either configure the calorie server URL in this build, or provide a test key here.] Sample meals load with "Load sample runs".
+>
+> Apart from meal photos the user chooses to estimate, all data is stored on the device only.
 
 Attaching a short screen recording of a run with the phone locked helps with the background-location question.
 

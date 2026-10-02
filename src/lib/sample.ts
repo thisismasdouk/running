@@ -1,4 +1,5 @@
 import { progressSeries } from './geo';
+import { dayKey, type FoodEntry, type Meal } from './food';
 import { DEFAULT_MAX_HR, summariseHeartRate, type HrSample } from './heartrate';
 import { lapsFromMarks } from './laps';
 import { buildRun } from './runs';
@@ -116,5 +117,33 @@ export function sampleRuns(now = Date.now()): Run[] {
       ...(i < 8 ? { heartRate: sampleHeartRate(run, i + 1, SAMPLE_HR[type]) } : {}),
       ...(type === 'intervals' ? { laps: lapsEvery(run, 800) } : type === 'tempo' ? { laps: lapsEvery(run, 2000) } : {}),
     };
+  });
+}
+
+/** A few days of logged meals, loaded with the sample runs. */
+export function sampleFood(now = Date.now()): FoodEntry[] {
+  const meals: [daysAgo: number, hour: number, meal: Meal, name: string, kcal: number, p: number, c: number, f: number, ai: boolean][] = [
+    [0, 7, 'breakfast', 'Porridge with banana and honey', 420, 12, 78, 8, true],
+    [0, 12, 'lunch', 'Chicken wrap and side salad', 610, 38, 55, 24, true],
+    [0, 16, 'snack', 'Greek yoghurt with berries', 180, 15, 20, 4, false],
+    [1, 8, 'breakfast', 'Scrambled eggs on toast', 450, 24, 34, 24, true],
+    [1, 13, 'lunch', 'Tuna pasta salad', 640, 34, 72, 22, true],
+    [1, 19, 'dinner', 'Salmon, rice and broccoli', 720, 42, 70, 26, true],
+    [1, 21, 'snack', 'Dark chocolate', 160, 2, 12, 11, false],
+    [2, 7, 'breakfast', 'Overnight oats', 390, 16, 58, 10, false],
+    [2, 13, 'lunch', 'Burrito bowl', 780, 36, 92, 28, true],
+    [2, 20, 'dinner', 'Spaghetti bolognese', 820, 40, 96, 26, true],
+    [3, 12, 'lunch', 'Falafel and hummus plate', 690, 22, 74, 32, true],
+    [3, 19, 'dinner', 'Chicken stir-fry with noodles', 760, 44, 88, 22, true],
+    [4, 8, 'breakfast', 'Bagel with peanut butter', 480, 16, 60, 18, false],
+    [4, 19, 'dinner', 'Margherita pizza (half)', 900, 36, 104, 34, true],
+    [5, 13, 'lunch', 'Lentil soup and bread', 520, 24, 80, 10, true],
+    [6, 19, 'dinner', 'Steak, potatoes and green beans', 850, 52, 60, 40, true],
+  ];
+  return meals.map(([daysAgo, hour, meal, name, kcal, p, c, f, ai], i) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() - daysAgo);
+    d.setHours(hour, 10 + i, 0, 0);
+    return { id: `sample-food-${i}`, day: dayKey(d.getTime()), at: d.getTime(), meal, name, kcal, proteinG: p, carbsG: c, fatG: f, source: ai ? 'ai' : 'manual' };
   });
 }

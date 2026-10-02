@@ -11,11 +11,11 @@ import { VoiceSettings } from '@/components/VoiceSettings';
 import { confirm, notice } from '@/lib/confirm';
 import { distanceUnit, formatDistanceValue } from '@/lib/format';
 import { runFromGpx } from '@/lib/gpx';
-import { SAMPLE_SHOE, sampleRuns } from '@/lib/sample';
+import { SAMPLE_SHOE, sampleFood, sampleRuns } from '@/lib/sample';
 import { pickTextFile } from '@/lib/share';
 import { totals, unitLength } from '@/lib/stats';
 import type { Units } from '@/lib/types';
-import { deleteRun, deleteShoe, saveRun, saveShoe, updateProfile, useProfile, useRuns } from '@/store';
+import { deleteFood, deleteRun, deleteShoe, getFood, saveFood, saveRun, saveShoe, updateProfile, useProfile, useRuns } from '@/store';
 
 export default function Profile() {
   const c = useColors();
@@ -56,12 +56,14 @@ export default function Profile() {
 
   const toggleSamples = async () => {
     if (hasSamples) {
-      if (!(await confirm('Remove sample runs?', 'Your own runs are kept.', 'Remove', true))) return;
+      if (!(await confirm('Remove sample data?', 'Your own runs and meals are kept.', 'Remove', true))) return;
       runs.filter((r) => r.id.startsWith('sample-')).forEach((r) => deleteRun(r.id));
       deleteShoe(SAMPLE_SHOE.id);
+      getFood().filter((e) => e.id.startsWith('sample-food-')).forEach((e) => deleteFood(e.id));
     } else {
       saveShoe(SAMPLE_SHOE);
       sampleRuns().forEach(saveRun);
+      sampleFood().forEach(saveFood);
     }
   };
 
@@ -159,9 +161,9 @@ export default function Profile() {
       <SectionTitle>Try it out</SectionTitle>
       <Card style={{ gap: 12 }}>
         <Text style={{ color: c.muted, lineHeight: 20 }}>
-          Load a few weeks of made-up runs to explore the feed, splits and records before your next outing.
+          Load a few weeks of made-up runs and a week of meals to explore the feed, records and food log before your next outing.
         </Text>
-        <Button title={hasSamples ? 'Remove sample runs' : 'Load sample runs'} onPress={toggleSamples} variant="secondary" />
+        <Button title={hasSamples ? 'Remove sample data' : 'Load sample runs'} onPress={toggleSamples} variant="secondary" />
       </Card>
 
       <SectionTitle>About</SectionTitle>
@@ -169,7 +171,7 @@ export default function Profile() {
         <Pressable accessibilityRole="link" onPress={() => router.push('/privacy')} style={styles.link}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.settingLabel, { color: c.text }]}>Privacy</Text>
-            <Text style={{ color: c.muted, fontSize: 13 }}>Your runs never leave this device</Text>
+            <Text style={{ color: c.muted, fontSize: 13 }}>Your runs and meals stay on this device</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={c.muted} />
         </Pressable>

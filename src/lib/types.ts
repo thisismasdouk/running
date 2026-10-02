@@ -153,4 +153,14 @@ export type Profile = {
   maxHr: number | null;
   /** Body weight in kg, for calorie estimates. */
   weightKg: number | null;
+  /** Daily calorie target for the food log. */
+  calorieGoal: number;
+  /** Add calories burned on runs to the day's budget. */
+  eatBackRuns: boolean;
+  /** OpenAI model used for meal photos. */
+  aiModel: string;
+  /** A server that holds the OpenAI key and forwards requests; used instead of a personal key when set. */
+  aiProxyUrl: string | null;
+  /** When the user agreed to send meal photos to OpenAI. */
+  aiConsentAt: number | null;
 };

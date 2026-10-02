@@ -46,6 +46,9 @@ export default function RootLayout() {
           <Stack.Screen name="run/[id]" options={{ title: 'Run' }} />
           <Stack.Screen name="edit/[id]" options={{ title: 'Save Run', presentation: 'modal' }} />
           <Stack.Screen name="share/[id]" options={{ title: 'Share Run', presentation: 'modal' }} />
+          <Stack.Screen name="food/add" options={{ title: 'Add Food', presentation: 'modal' }} />
+          <Stack.Screen name="food/[id]" options={{ title: 'Food' }} />
+          <Stack.Screen name="food/settings" options={{ title: 'Food & AI Settings' }} />
           <Stack.Screen name="privacy" options={{ title: 'Privacy' }} />
           <Stack.Screen name="workouts/index" options={{ title: 'Workouts' }} />
           <Stack.Screen name="workouts/[id]" options={{ title: 'Workout' }} />

@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from 'react';
 
+import { normaliseFood, type FoodEntry } from '@/lib/food';
+import { DEFAULT_AI_MODEL } from '@/lib/food-ai';
 import { getPlan, recordRun, setSession, unlinkRun } from '@/lib/plans';
 import { normaliseRun } from '@/lib/runs';
 import type { ActivePlan, Profile, Run, SessionStatus, Shoe, Workout } from '@/lib/types';
@@ -12,6 +14,7 @@ const PROFILE_KEY = 'profile';
 const SHOES_KEY = 'shoes';
 const WORKOUTS_KEY = 'workouts';
 const PLAN_KEY = 'plan';
+const FOOD_KEY = 'food';
 
 export const DEFAULT_PROFILE: Profile = {
   name: 'Runner',
@@ -27,6 +30,11 @@ export const DEFAULT_PROFILE: Profile = {
   healthSync: false,
   maxHr: null,
   weightKg: null,
+  calorieGoal: 2000,
+  eatBackRuns: true,
+  aiModel: DEFAULT_AI_MODEL,
+  aiProxyUrl: null,
+  aiConsentAt: null,
 };
 
 type Listener = () => void;
@@ -72,6 +80,10 @@ const runsStore = createStore<Run[]>(() => {
 });
 
 const profileStore = createStore<Profile>(() => ({ ...DEFAULT_PROFILE, ...readJSON<Partial<Profile>>(PROFILE_KEY) }));
+
+const foodStore = createStore<FoodEntry[]>(() =>
+  (readJSON<FoodEntry[]>(FOOD_KEY) ?? []).map(normaliseFood).filter((e): e is FoodEntry => e != null),
+);
 
 const shoesStore = createStore<Shoe[]>(() => readJSON<Shoe[]>(SHOES_KEY) ?? []);
 
@@ -200,6 +212,22 @@ export function recordRunInPlan(run: Run, sessionKey?: string) {
   if (active && plan) persistPlan(recordRun(plan, active, run, sessionKey));
 }
 
+function persistFood(next: FoodEntry[]) {
+  kv.set(FOOD_KEY, JSON.stringify(next));
+  foodStore.set(next);
+}
+
+/** Adds or replaces a food log entry. */
+export function saveFood(entry: FoodEntry) {
+  persistFood([...foodStore.get().filter((e) => e.id !== entry.id), entry]);
+}
+
+export function deleteFood(id: string) {
+  persistFood(foodStore.get().filter((e) => e.id !== id));
+}
+
+export const getFood = () => foodStore.get();
+
 export const getRuns = () => runsStore.get();
 export const getActivePlan = () => planStore.get().plan;
 export const getProfile = () => profileStore.get();
@@ -226,4 +254,8 @@ export function useActivePlan(): ActivePlan | null {
 
 export function useProfile(): Profile {
   return useSyncExternalStore(profileStore.subscribe, profileStore.get, profileStore.get);
+}
+
+export function useFood(): FoodEntry[] {
+  return useSyncExternalStore(foodStore.subscribe, foodStore.get, foodStore.get);
 }

@@ -14,14 +14,15 @@ const SECTIONS: [title: string, body: string][] = [
   ],
   [
     'Where it is stored',
-    'Everything is stored only on this device. Pacebook has no account, no server, no analytics and no advertising. Nothing you record is sent to us or to anyone else. When you share a run image or export a GPX file, it goes only to the app you pick.',
+    'Everything is stored only on this device. Pacebook has no account, no server, no analytics and no advertising. Nothing you record is sent to us or to anyone else, except meal photos you choose to have estimated (below). When you share a run image or export a GPX file, it goes only to the app you pick.',
   ],
   [
     'Location in the background',
     'Location is used only while a run is being recorded, including when the screen is locked so your run keeps recording. iPhone shows a blue location indicator and Android shows a notification the whole time. Pacebook stops using location when you finish or discard the run.',
   ],
   ['Apple Health', 'If you turn on Apple Health in the You tab, Pacebook saves your runs to Health as workouts (with route and distance) and reads your heart rate for the time of each run to show heart-rate zones. Health data stays on your device, is never sent to us or anyone else, and is never used for advertising. You can turn access off at any time in Settings → Health → Data Access & Devices.'],
-  ['Deleting your data', 'Delete any run from its detail screen. Uninstalling Pacebook removes all of its data from the device.'],
+  ['Food log and AI photo estimates', 'The Food tab keeps a calorie and macro log on your device. If you use photo estimates, after you agree in the app the meal photo and any note you type are sent to OpenAI (directly with your own API key, or through a calorie server set in Food settings) to estimate calories, and the answer comes back to your phone. Nothing else is sent: no runs, location, name or health data. OpenAI does not use API data to train its models by default and may keep it for up to 30 days to prevent abuse (openai.com/policies). You can withdraw consent or remove your key at any time in Food settings, and you can always log food by hand without AI.'],
+  ['Deleting your data', 'Delete any run or food entry from its screen. Uninstalling Pacebook removes all of its data from the device.'],
   ['Children', 'Pacebook does not knowingly collect any personal information from anyone, including children.'],
   ['Changes', 'If this policy changes, the new version will be shown here and on the App Store listing.'],
 ];
