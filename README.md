@@ -42,6 +42,8 @@ npm install
 npm start             # Expo Go (expo start --go)
 ```
 
+To get the latest version later, run `npm run update`. It throws away the local `package-lock.json` changes that `npm install` makes (otherwise `git pull` refuses with "Your local changes … would be overwritten"), switches to `main`, pulls and reinstalls.
+
 Scan the QR code with **Expo Go** to try it right away. Expo Go can't keep tracking in the background, so keep the app open while you run. For real runs with the phone in your pocket, make a development build:
 
 ```bash
